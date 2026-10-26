@@ -1,5 +1,4 @@
 import "./lib/gsap";
-if (location.pathname !== "/login") void import("./pages/DashboardPage");
 import React from "react";
 import ReactDOM from "react-dom/client";
 import {BrowserRouter} from "react-router-dom";

@@ -21,8 +21,7 @@ export default defineConfig(({ mode }) => {
               "gsap/Flip",
               "gsap/Observer",
               "gsap/ScrambleTextPlugin",
-              "gsap/DrawSVGPlugin",
-              "gsap/MotionPathPlugin"
+              "gsap/DrawSVGPlugin"
             ]
           }
         }

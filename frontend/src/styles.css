@@ -5,13 +5,13 @@
   --ok:#4ade80;--ok-soft:rgba(74,222,128,.1);--warn:#fbbf24;--warn-soft:rgba(251,191,36,.1);--bad:#ff6b6b;--bad-soft:rgba(255,80,80,.12);
   --shadow:0 1px 0 rgba(255,255,255,.04) inset,0 18px 40px -22px rgba(0,0,0,.9);
   --r:16px;color-scheme:dark;
-  --display:"Space Grotesk",Inter,system-ui,sans-serif;
+  --display:ui-sans-serif,system-ui,-apple-system,"Segoe UI",sans-serif;
 }
 @property --a{syntax:"<number>";inherits:true;initial-value:0}
 
 *{box-sizing:border-box}
 html,body{margin:0}
-body{background:var(--bg);background-image:radial-gradient(60rem 32rem at 85% -12%,rgba(240,57,43,.16),transparent 70%),radial-gradient(40rem 30rem at -10% 110%,rgba(255,122,69,.08),transparent 70%);color:var(--fg);font:14.5px/1.55 Inter,system-ui,-apple-system,"Segoe UI",sans-serif;-webkit-font-smoothing:antialiased;transition:background .25s,color .25s}
+body{background:var(--bg);background-image:radial-gradient(60rem 32rem at 85% -12%,rgba(240,57,43,.16),transparent 70%),radial-gradient(40rem 30rem at -10% 110%,rgba(255,122,69,.08),transparent 70%);color:var(--fg);font:14.5px/1.55 ui-sans-serif,system-ui,-apple-system,"Segoe UI",sans-serif;-webkit-font-smoothing:antialiased;transition:background .25s,color .25s}
 h1,h2,h3,p{margin:0}
 b{font-weight:600}small{color:var(--mute);font-size:12.5px}
 .mute{color:var(--mute)}.right{text-align:right}

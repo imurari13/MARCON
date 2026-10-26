@@ -65,7 +65,7 @@ export default function Layout() {
       <div className="shell">
         <aside>
           <div className="logo">
-            <img src="/marcamor-logo.png" alt="Marcamor" />
+            <img src="/marcamor-logo.png" width="197" height="46" alt="Marcamor" />
             <small>MarcOn</small>
           </div>
           <nav ref={nav}>
@@ -96,7 +96,7 @@ export default function Layout() {
           </div>
         </aside>
         <header className="topbar">
-          <img src="/marcamor-logo.png" alt="Marcamor" />
+          <img src="/marcamor-logo.png" width="197" height="46" alt="Marcamor" />
           <div className="topbar-r">
             <NavLink to="/updates" className="icon-btn" aria-label="Updates"><IconBell /></NavLink>
             <button className="icon-btn" onClick={() => void logout()} aria-label="Sign out"><IconLogout /></button>

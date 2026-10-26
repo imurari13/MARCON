@@ -4,9 +4,8 @@ import { Flip } from "gsap/Flip";
 import { Observer } from "gsap/Observer";
 import { ScrambleTextPlugin } from "gsap/ScrambleTextPlugin";
 import { DrawSVGPlugin } from "gsap/DrawSVGPlugin";
-import { MotionPathPlugin } from "gsap/MotionPathPlugin";
 
-gsap.registerPlugin(SplitText, Flip, Observer, ScrambleTextPlugin, DrawSVGPlugin, MotionPathPlugin);
+gsap.registerPlugin(SplitText, Flip, Observer, ScrambleTextPlugin, DrawSVGPlugin);
 
 /**
  * True when heavy motion should be skipped: the OS asks for reduced motion, OR the screen is a phone/small tablet.

@@ -5,10 +5,15 @@ import { apiRequest, clearApiCache, setUnauthorizedHandler, warmCache } from "..
 interface AuthValue {
   user: CurrentUser | null;
   loading: boolean;
-  login: (email: string, password: string, organizationId?: string) => Promise<boolean>;
+  login: (email: string, password: string, organizationId: string | undefined, location: LoginLocation) => Promise<boolean>;
   verifyMfa: (code: string) => Promise<void>;
   logout: () => Promise<void>;
   refresh: () => Promise<void>;
+}
+
+export interface LoginLocation {
+  latitude: number;
+  longitude: number;
 }
 const Context = createContext<AuthValue | null>(null);
 
@@ -34,8 +39,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return () => setUnauthorizedHandler(null);
   }, []);
 
-  const login = async (email: string, password: string, organizationId = "default") => {
-    const r = await apiRequest<{ user?: CurrentUser; mfaRequired?: boolean }>("/auth/login", { method: "POST", headers: { "X-Organization": organizationId }, body: JSON.stringify({ email, password }) });
+  const login = async (email: string, password: string, organizationId = "default", location: LoginLocation) => {
+    const r = await apiRequest<{ user?: CurrentUser; mfaRequired?: boolean }>("/auth/login", { method: "POST", headers: { "X-Organization": organizationId }, body: JSON.stringify({ email, password, location }) });
     if (r.mfaRequired) return true;
     if (r.user) { clearApiCache(); setUser(r.user); warmCache(r.user.role === "CEO" || r.user.role === "HR"); }
     return false;

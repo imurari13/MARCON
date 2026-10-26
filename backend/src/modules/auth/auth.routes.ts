@@ -29,10 +29,33 @@ const loginLimiter = rateLimit({
   },
 });
 
+const loginLocationSchema = z.object({
+  latitude: z.number().finite().gte(-90).lte(90),
+  longitude: z.number().finite().gte(-180).lte(180),
+});
+
 const loginSchema = z.object({
   email: z.string().trim().email().max(254),
   password: z.string().min(1).max(128),
+  location: loginLocationSchema.optional(),
 });
+
+function distanceInMeters(
+  from: { latitude: number; longitude: number },
+  to: { latitude: number; longitude: number }
+) {
+  const radians = (value: number) => (value * Math.PI) / 180;
+  const earthRadiusMeters = 6_371_000;
+  const deltaLatitude = radians(to.latitude - from.latitude);
+  const deltaLongitude = radians(to.longitude - from.longitude);
+  const a =
+    Math.sin(deltaLatitude / 2) ** 2 +
+    Math.cos(radians(from.latitude)) *
+      Math.cos(radians(to.latitude)) *
+      Math.sin(deltaLongitude / 2) ** 2;
+
+  return 2 * earthRadiusMeters * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+}
 
 authRouter.post("/login", loginLimiter, async (req, res, next) => {
   try {
@@ -43,6 +66,23 @@ authRouter.post("/login", loginLimiter, async (req, res, next) => {
         error: "Enter a valid email and password",
       });
       return;
+    }
+
+    if (env.OFFICE_LOGIN_ENFORCED) {
+      if (!parsed.data.location) {
+        res.status(403).json({ error: "Location permission is required to sign in from the office." });
+        return;
+      }
+
+      const distance = distanceInMeters(parsed.data.location, {
+        latitude: env.OFFICE_LATITUDE,
+        longitude: env.OFFICE_LONGITUDE,
+      });
+
+      if (distance > env.OFFICE_LOGIN_RADIUS_METERS) {
+        res.status(403).json({ error: "Sign-in is allowed only from the office location." });
+        return;
+      }
     }
 
     const email = parsed.data.email.toLowerCase();

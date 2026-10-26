@@ -1,0 +1,3 @@
+import mongoose,{Schema,type Document}from"mongoose";
+export interface INotification extends Document{userId:mongoose.Types.ObjectId;title:string;body:string;type:string;readAt?:Date|null;link?:string|null}
+const schema=new Schema<INotification>({userId:{type:Schema.Types.ObjectId,ref:"User",required:true},title:{type:String,required:true,maxlength:120},body:{type:String,required:true,maxlength:500},type:{type:String,required:true},readAt:{type:Date,default:null},link:{type:String,default:null}},{timestamps:true});schema.index({userId:1,createdAt:-1});export default mongoose.model<INotification>("Notification",schema);

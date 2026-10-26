@@ -1,0 +1,3 @@
+import mongoose,{Schema,type Document}from"mongoose";
+export interface IAnnouncement extends Document{title:string;body:string;publishedBy:mongoose.Types.ObjectId;publishedAt:Date;audience:"ALL"|"MANAGERS";acknowledgedBy:mongoose.Types.ObjectId[]}
+const schema=new Schema<IAnnouncement>({title:{type:String,required:true,trim:true,maxlength:160},body:{type:String,required:true,trim:true,maxlength:5000},publishedBy:{type:Schema.Types.ObjectId,ref:"User",required:true},publishedAt:{type:Date,default:Date.now},audience:{type:String,enum:["ALL","MANAGERS"],default:"ALL"},acknowledgedBy:[{type:Schema.Types.ObjectId,ref:"User"}]},{timestamps:true});export default mongoose.model<IAnnouncement>("Announcement",schema);

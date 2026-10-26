@@ -1,0 +1,4 @@
+import mongoose,{Schema,type Document}from"mongoose";
+export type WorkItemKind="ONBOARDING"|"OFFBOARDING"|"GOAL"|"EXPENSE"|"ASSET"|"TICKET";
+export interface IWorkItem extends Document{kind:WorkItemKind;title:string;description?:string;ownerId:mongoose.Types.ObjectId;assigneeId?:mongoose.Types.ObjectId;status:string;dueDate?:string;amount?:number;metadata?:Record<string,unknown>}
+const schema=new Schema<IWorkItem>({kind:{type:String,enum:["ONBOARDING","OFFBOARDING","GOAL","EXPENSE","ASSET","TICKET"],required:true},title:{type:String,required:true,trim:true,maxlength:200},description:{type:String,maxlength:4000},ownerId:{type:Schema.Types.ObjectId,ref:"User",required:true},assigneeId:{type:Schema.Types.ObjectId,ref:"User"},status:{type:String,default:"OPEN"},dueDate:String,amount:Number,metadata:{type:Schema.Types.Mixed,default:{}}},{timestamps:true});schema.index({kind:1,ownerId:1,createdAt:-1});export default mongoose.model<IWorkItem>("WorkItem",schema);

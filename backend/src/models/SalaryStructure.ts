@@ -1,0 +1,3 @@
+import mongoose,{Schema,type Document}from"mongoose";
+export interface ISalaryStructure extends Document{userId:mongoose.Types.ObjectId;basic:number;allowances:number;deductions:number;effectiveFrom:string}
+const schema=new Schema<ISalaryStructure>({userId:{type:Schema.Types.ObjectId,ref:"User",required:true},basic:{type:Number,required:true,min:0},allowances:{type:Number,default:0,min:0},deductions:{type:Number,default:0,min:0},effectiveFrom:{type:String,required:true}},{timestamps:true});schema.index({userId:1,effectiveFrom:-1});export default mongoose.model<ISalaryStructure>("SalaryStructure",schema);

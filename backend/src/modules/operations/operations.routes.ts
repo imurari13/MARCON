@@ -1,0 +1,21 @@
+import { Router } from "express";
+import { z } from "zod";
+import Shift from "../../models/Shift.js";
+import Overtime from "../../models/Overtime.js";
+import User from "../../models/User.js";
+import { requireAuth } from "../../middleware/require-auth.js";
+import { requireRole } from "../../middleware/require-role.js";
+import { isObjectId, isRealDate } from "../../utils/date.js";
+import { audit } from "../../utils/audit.js";
+
+export const operationsRouter=Router(); operationsRouter.use(requireAuth);
+const time=z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/);
+const shiftSchema=z.object({name:z.string().trim().min(2).max(60),startTime:time,endTime:time,weeklyOff:z.array(z.number().int().min(0).max(6)).min(1).max(7)}).refine(v=>v.startTime!==v.endTime,{message:"Shift start and end must differ"});
+operationsRouter.get("/shifts",async(_q,res,next)=>{try{res.json({shifts:await Shift.find().sort({name:1})});}catch(e){next(e)}});
+operationsRouter.post("/shifts",requireRole("CEO","HR"),async(req,res,next)=>{try{const p=shiftSchema.safeParse(req.body);if(!p.success){res.status(400).json({error:"Invalid shift"});return}const shift=await Shift.create(p.data);void audit(req,"SHIFT_CREATED","Shift",shift.id);res.status(201).json({shift});}catch(e){next(e)}});
+operationsRouter.patch("/employees/:id/shift",requireRole("CEO","HR"),async(req,res,next)=>{try{const employeeId=req.params.id;const p=z.object({shiftId:z.string().nullable()}).safeParse(req.body);if(!employeeId||!isObjectId(employeeId)||!p.success||(p.data.shiftId&&!isObjectId(p.data.shiftId))){res.status(400).json({error:"Invalid assignment"});return}if(p.data.shiftId&&!await Shift.exists({_id:p.data.shiftId,isActive:true})){res.status(404).json({error:"Shift not found"});return}const employee=await User.findByIdAndUpdate(employeeId,{$set:{shiftId:p.data.shiftId}},{returnDocument:"after"});if(!employee){res.status(404).json({error:"Employee not found"});return}void audit(req,"SHIFT_ASSIGNED","User",employee.id,{shiftId:p.data.shiftId});res.json({employee});}catch(e){next(e)}});
+const overtimeSchema=z.object({date:z.string().regex(/^\d{4}-\d{2}-\d{2}$/).refine(isRealDate),minutes:z.number().int().min(1).max(960)});
+operationsRouter.post("/overtime",async(req,res,next)=>{try{const p=overtimeSchema.safeParse(req.body);if(!p.success){res.status(400).json({error:"Invalid overtime entry"});return}const overtime=await Overtime.create({...p.data,userId:res.locals.user.id});void audit(req,"OVERTIME_REQUESTED","Overtime",overtime.id,{date:p.data.date,minutes:p.data.minutes});res.status(201).json({overtime});}catch(e){next(e)}});
+operationsRouter.get("/overtime/mine",async(_q,res,next)=>{try{res.json({entries:await Overtime.find({userId:res.locals.user.id}).sort({date:-1})});}catch(e){next(e)}});
+operationsRouter.get("/overtime",requireRole("CEO","HR","MANAGER"),async(_q,res,next)=>{try{const actor=res.locals.user as {id:string;role:string};const ids=actor.role==="MANAGER"?await User.find({managerId:actor.id}).distinct("_id"):undefined;res.json({entries:await Overtime.find(ids?{userId:{$in:ids},status:"PENDING"}:{status:"PENDING"}).populate("userId","name employeeId").sort({createdAt:1})});}catch(e){next(e)}});
+for(const [action,status] of [["approve","APPROVED"],["reject","REJECTED"]] as const)operationsRouter.post(`/overtime/:id/${action}`,requireRole("CEO","HR","MANAGER"),async(req,res,next)=>{try{const id=req.params.id;if(!id||!isObjectId(id)){res.status(400).json({error:"Invalid overtime entry"});return}const entry=await Overtime.findOne({_id:id,status:"PENDING"});if(!entry){res.status(409).json({error:"Entry is no longer pending"});return}const actor=res.locals.user as {id:string;role:string};if(actor.role==="MANAGER"&&!await User.exists({_id:entry.userId,managerId:actor.id})){res.status(403).json({error:"You may only review your direct reports"});return}entry.status=status;entry.reviewedBy=actor.id as never;await entry.save();void audit(req,`OVERTIME_${status}`,"Overtime",entry.id);res.json({entry});}catch(e){next(e)}});

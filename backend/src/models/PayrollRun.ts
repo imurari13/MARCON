@@ -1,0 +1,3 @@
+import mongoose,{Schema,type Document}from"mongoose";
+export interface IPayrollRun extends Document{month:string;status:"DRAFT"|"FINALIZED";processedBy:mongoose.Types.ObjectId;items:{userId:mongoose.Types.ObjectId;gross:number;deductions:number;net:number;absentDays:number;lateMarks:number}[]}
+const schema=new Schema<IPayrollRun>({month:{type:String,required:true,unique:true},status:{type:String,enum:["DRAFT","FINALIZED"],default:"DRAFT"},processedBy:{type:Schema.Types.ObjectId,ref:"User",required:true},items:[{userId:{type:Schema.Types.ObjectId,ref:"User",required:true},gross:Number,deductions:Number,net:Number,absentDays:Number,lateMarks:Number}]},{timestamps:true});export default mongoose.model<IPayrollRun>("PayrollRun",schema);

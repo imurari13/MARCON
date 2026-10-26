@@ -1,0 +1,3 @@
+import mongoose,{Schema,type Document}from"mongoose";
+export interface IOvertime extends Document{userId:mongoose.Types.ObjectId;date:string;minutes:number;status:"PENDING"|"APPROVED"|"REJECTED";reviewedBy?:mongoose.Types.ObjectId}
+const schema=new Schema<IOvertime>({userId:{type:Schema.Types.ObjectId,ref:"User",required:true},date:{type:String,required:true},minutes:{type:Number,required:true,min:1},status:{type:String,enum:["PENDING","APPROVED","REJECTED"],default:"PENDING"},reviewedBy:{type:Schema.Types.ObjectId,ref:"User"}},{timestamps:true});schema.index({userId:1,date:1});export default mongoose.model<IOvertime>("Overtime",schema);

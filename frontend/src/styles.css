@@ -36,7 +36,9 @@ nav a.active{color:var(--accent);background:transparent}
 .icon-btn{display:grid;place-items:center;width:34px;height:34px;border-radius:9px;border:0;background:transparent;color:var(--mute);cursor:pointer;transition:background .2s,color .2s}
 .icon-btn:hover{background:var(--hover);color:var(--fg)}
 .side-foot>.icon-btn{align-self:flex-start}
-main{padding:48px clamp(20px,4vw,56px) 72px;max-width:1100px;width:100%}
+/* App content lives inside the authenticated shell. Scoping this prevents full-screen
+   pages such as login and change-password from being constrained to a narrow column. */
+.shell > main{padding:48px clamp(20px,4vw,56px) 72px;max-width:1100px;width:100%}
 
 /* ---------- primitives ---------- */
 .pagehead{display:flex;justify-content:space-between;align-items:flex-end;gap:16px;margin-bottom:28px}

@@ -5,20 +5,6 @@ import { reduced, whenReady } from "../lib/gsap";
 import GhostTitle from "../components/GhostTitle";
 import Embers from "../components/Embers";
 
-function requestOfficeLocation(): Promise<{ latitude: number; longitude: number }> {
-  if (!navigator.geolocation) {
-    return Promise.reject(new Error("This browser cannot provide location. Use a supported browser at the office."));
-  }
-
-  return new Promise((resolve, reject) => {
-    navigator.geolocation.getCurrentPosition(
-      ({ coords }) => resolve({ latitude: coords.latitude, longitude: coords.longitude }),
-      () => reject(new Error("Location permission is required to sign in from the office.")),
-      { enableHighAccuracy: true, timeout: 15_000, maximumAge: 30_000 }
-    );
-  });
-}
-
 export default function LoginPage() {
   const { login, verifyMfa } = useAuth();
   const [email, setEmail] = useState("");
@@ -76,10 +62,7 @@ export default function LoginPage() {
   async function submit(e: FormEvent) {
     e.preventDefault();
     setError(""); setBusy(true);
-    try {
-      const location = await requestOfficeLocation();
-      setMfa(await login(email.trim(), password, organization.trim().toLowerCase() || "default", location));
-    }
+    try { setMfa(await login(email.trim(), password, organization.trim().toLowerCase() || "default")); }
     catch (err) {
       setError(err instanceof Error ? err.message : "Unable to sign in");
       if (form.current && !reduced()) gsap.fromTo(form.current, { x: -14 }, { x: 0, duration: 0.8, ease: "elastic.out(1,0.2)" });
@@ -111,7 +94,7 @@ export default function LoginPage() {
           <form ref={form} onSubmit={mfa ? submitMfa : submit}>
             <small className="eyebrow" data-f>Secure access</small>
             <h2 data-f>{mfa ? "Verify your sign-in" : "Welcome back"}</h2>
-            <p className="sub" data-f>{mfa ? "Enter your six-digit authenticator code." : "Sign in from the office. We will request your device location."}</p>
+            <p className="sub" data-f>{mfa ? "Enter your six-digit authenticator code." : "Sign in with the account your admin gave you."}</p>
             <label data-f>Email<input type="email" autoComplete="username" required value={email} onChange={(e) => setEmail(e.target.value)} placeholder="you@company.com" /></label>
             <label data-f>Organization<input autoComplete="organization" required value={organization} onChange={(e) => setOrganization(e.target.value.replace(/[^a-zA-Z0-9-]/g, "").toLowerCase())} placeholder="default" /></label>
             <label data-f>Password<input type="password" autoComplete="current-password" required value={password} onChange={(e) => setPassword(e.target.value)} placeholder="••••••••••••" /></label>

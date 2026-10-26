@@ -47,17 +47,6 @@ const schema = z
       .positive()
       .default(10),
 
-    OFFICE_LOGIN_ENFORCED: z
-      .enum(["true", "false"])
-      .default("true")
-      .transform((value) => value === "true"),
-
-    OFFICE_LATITUDE: z.coerce.number().gte(-90).lte(90).default(17.4439608),
-
-    OFFICE_LONGITUDE: z.coerce.number().gte(-180).lte(180).default(78.3843579),
-
-    OFFICE_LOGIN_RADIUS_METERS: z.coerce.number().positive().max(5000).default(150),
-
     INITIAL_ADMIN_NAME: z.string().optional(),
 
     INITIAL_ADMIN_EMAIL: z.string().email().optional(),

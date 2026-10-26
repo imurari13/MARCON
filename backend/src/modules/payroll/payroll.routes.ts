@@ -97,7 +97,7 @@ payrollRouter.get("/payslip/:month", async (req, res, next) => {
     const month = req.params.month;
     const run = await PayrollRun.findOne({ month, "items.userId": res.locals.user.id });
     const item = run?.items.find(record => record.userId.toString() === res.locals.user.id);
-    if (!run || !item) { res.status(404).json({ error: "Payslip not found" }); return; }
+    if (!run || !item) { res.json({ payslip: null }); return; }
     res.json({ payslip: { month, status: run.status, ...item } });
   } catch (error) { next(error); }
 });

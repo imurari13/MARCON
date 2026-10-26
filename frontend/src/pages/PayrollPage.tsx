@@ -17,8 +17,7 @@ export default function PayrollPage() {
 
   const load = useCallback(async () => {
     if (admin) setRuns((await apiRequest<{ runs: Run[] }>("/payroll/runs")).runs);
-    try { setPayslip((await apiRequest<{ payslip: Payslip }>(`/payroll/payslip/${month}`)).payslip); }
-    catch { setPayslip(null); }
+    setPayslip((await apiRequest<{ payslip: Payslip | null }>(`/payroll/payslip/${month}`)).payslip);
   }, [admin, month]);
   useEffect(() => { void load().catch((error: Error) => toast(error.message, "bad")); }, [load, toast]);
 

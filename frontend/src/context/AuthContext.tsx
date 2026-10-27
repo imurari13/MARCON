@@ -22,14 +22,27 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const r = await apiRequest<{ user: CurrentUser | null }>("/auth/me");
       setUser(r.user);
       if (r.user) warmCache(r.user.role === "CEO" || r.user.role === "HR");
-    } catch {
-      setUser(null);
+    } catch (error) {
+      console.error("Unable to refresh the signed-in profile:", error);
     } finally {
       setLoading(false);
     }
   }, []);
 
   useEffect(() => { void refresh(); }, [refresh]);
+  useEffect(() => {
+    const refreshWhenVisible = () => {
+      if (document.visibilityState === "visible") void refresh();
+    };
+    const interval = window.setInterval(refreshWhenVisible, 60_000);
+    document.addEventListener("visibilitychange", refreshWhenVisible);
+    window.addEventListener("focus", refreshWhenVisible);
+    return () => {
+      window.clearInterval(interval);
+      document.removeEventListener("visibilitychange", refreshWhenVisible);
+      window.removeEventListener("focus", refreshWhenVisible);
+    };
+  }, [refresh]);
   useEffect(() => {
     setUnauthorizedHandler(() => { clearApiCache(); setUser(null); });
     return () => setUnauthorizedHandler(null);

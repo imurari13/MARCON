@@ -112,12 +112,16 @@ employeesRouter.patch("/:id/schedule", async (req, res, next) => {
     if (!id || !isObjectId(id)) { res.status(400).json({ error: "Invalid employee id" }); return; }
     const parsed = scheduleSchema.safeParse(req.body);
     if (!parsed.success) { res.status(400).json({ error: parsed.error.issues[0]?.message ?? "Invalid schedule" }); return; }
-    const employee = await User.findById(id);
+    const existing = await User.findById(id).select("role");
+    if (!existing) { res.status(404).json({ error: "Employee not found" }); return; }
+    if (!canManageEmployee((res.locals.user as { role: string }).role, existing.role)) { res.status(403).json({ error: "Only the CEO can change CEO or HR accounts" }); return; }
+    const employee = await User.findByIdAndUpdate(
+      id,
+      { $set: parsed.data },
+      { returnDocument: "after", runValidators: true },
+    );
     if (!employee) { res.status(404).json({ error: "Employee not found" }); return; }
-    if (!canManageEmployee((res.locals.user as { role: string }).role, employee.role)) { res.status(403).json({ error: "Only the CEO can change CEO or HR accounts" }); return; }
-    employee.workStartTime = parsed.data.workStartTime;
-    employee.workEndTime = parsed.data.workEndTime;
-    await employee.save();
+    void audit(req, "EMPLOYEE_SCHEDULE_UPDATED", "User", employee.id, parsed.data);
     res.json({ workStartTime: employee.workStartTime, workEndTime: employee.workEndTime });
   } catch (error) { next(error); }
 });

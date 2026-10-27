@@ -11,7 +11,7 @@ const blank = { employeeId: "", name: "", email: "", password: "", role: "EMPLOY
 
 export default function EmployeesPage() {
   const toast = useToast();
-  const { user } = useAuth();
+  const { user, refresh } = useAuth();
   const isCeo = user?.role === "CEO";
   const [rows, setRows] = useState<Emp[] | null>(null);
   const [open, setOpen] = useState(false);
@@ -41,7 +41,7 @@ export default function EmployeesPage() {
     catch (error) { toast((error as Error).message, "bad"); await load(); }
   };
   const saveSchedule = async (employee: Emp) => {
-    try { await apiRequest(`/employees/${employee._id}/schedule`, { method: "PATCH", body: JSON.stringify(scheduleFor(employee)) }); setSchedules((current) => { const next = { ...current }; delete next[employee._id]; return next; }); await load(); toast(`${employee.name}'s shift saved`); }
+    try { await apiRequest(`/employees/${employee._id}/schedule`, { method: "PATCH", body: JSON.stringify(scheduleFor(employee)) }); setSchedules((current) => { const next = { ...current }; delete next[employee._id]; return next; }); await load(); if (user?.id === employee._id) await refresh(); toast(`${employee.name}'s shift saved`); }
     catch (error) { toast((error as Error).message, "bad"); }
   };
   const reportingFor = (employee: Emp) => reporting[employee._id] ?? { department: employee.department ?? "", managerId: employee.managerId ?? "" };

@@ -5,12 +5,17 @@ import { apiRequest } from "../services/api";
 import { Card, Empty, PageHead, Pill, Skeleton } from "../components/ui";
 import { useToast } from "../components/Toast";
 import { IconClock } from "../components/Icons";
+import { ColumnChart, type Bar } from "../components/Charts";
 import AnalogClock from "../components/AnalogClock";
 import ActionBurst, { type BurstKind } from "../components/ActionBurst";
 import { useAuth } from "../context/AuthContext";
+import { dayLabel, fmtMinutes } from "../lib/format";
 
 interface Rec { _id: string; date: string; checkIn: string; checkOut: string | null; lateMinutes?: number; earlyCheckoutReason?: string | null }
 interface Fix { _id: string; date: string; reason: string; status: string; requestedCheckIn?: string | null; requestedCheckOut?: string | null }
+interface MonthDay { date: string; status: "present" | "incomplete" | "leave" | "holiday" | "weekend" | "absent" | "upcoming" | "na"; minutes: number; missedPunchOut: boolean }
+interface MonthSummary { workingDays: number; present: number; incomplete: number; minutes: number; rate: number }
+interface PersonalMonth { summary: MonthSummary; days: MonthDay[] }
 const blankFix = { date: "", requestedCheckIn: "", requestedCheckOut: "", reason: "" };
 /** "YYYY-MM-DDTHH:mm" for a datetime-local input. */
 const localInput = (date: string, hhmm: string) => `${date}T${hhmm}`;
@@ -55,6 +60,7 @@ export default function AttendancePage() {
   const { user } = useAuth();
   const [today, setToday] = useState<Rec | null>(null);
   const [rows, setRows] = useState<Rec[] | null>(null);
+  const [month, setMonth] = useState<PersonalMonth | null>(null);
   const [now, setNow] = useState(new Date());
   const [busy, setBusy] = useState(false);
   const [burst, setBurst] = useState<{ kind: BurstKind; caption: string } | null>(null);
@@ -65,10 +71,14 @@ export default function AttendancePage() {
   const [showCheckout, setShowCheckout] = useState(false);
   const form = useRef<HTMLFormElement>(null);
   const load = useCallback(async () => {
-    const [a, b, c] = await Promise.all([apiRequest<{ record: Rec | null; blockedBy: string | null }>("/attendance/today"), apiRequest<{ records: Rec[] }>("/attendance"), apiRequest<{ requests: Fix[] }>("/attendance/regularizations/mine")]);
-    setToday(a.record); setBlockedBy(a.blockedBy); setRows(b.records); setFixes(c.requests);
+    const [a, b, c, d] = await Promise.all([apiRequest<{ record: Rec | null; blockedBy: string | null }>("/attendance/today"), apiRequest<{ records: Rec[] }>("/attendance"), apiRequest<{ requests: Fix[] }>("/attendance/regularizations/mine"), apiRequest<PersonalMonth>("/attendance/summary")]);
+    setToday(a.record); setBlockedBy(a.blockedBy); setRows(b.records); setFixes(c.requests); setMonth(d);
   }, []);
   useEffect(() => { load().catch((e: Error) => toast(e.message, "bad")); }, [load, toast]);
+  useEffect(() => {
+    const refresh = window.setInterval(() => { load().catch(() => undefined); }, 30_000);
+    return () => window.clearInterval(refresh);
+  }, [load]);
   useEffect(() => { const i = setInterval(() => setNow(new Date()), 1000); return () => clearInterval(i); }, []);
 
   async function act(path: string, kind: BurstKind, body?: unknown) {
@@ -103,6 +113,14 @@ export default function AttendancePage() {
     setCorrection({ date, requestedCheckIn: "", requestedCheckOut: localInput(date, user?.workEndTime ?? "18:30"), reason: "Forgot to check out" });
     form.current?.scrollIntoView({ behavior: reduced() ? "auto" : "smooth", block: "center" });
   }
+  const monthBars: Bar[] = (month?.days ?? []).filter((d) => d.status !== "na").map((d) => ({
+    key: d.date,
+    label: dayLabel(d.date),
+    value: Math.round((d.minutes / 60) * 10) / 10,
+    faded: !["present", "incomplete"].includes(d.status),
+    tone: d.status === "incomplete" ? "warn" as const : "accent" as const,
+    hint: d.status === "present" ? `${fmtMinutes(d.minutes)} worked` : d.status === "incomplete" ? `${fmtMinutes(d.minutes)} so far${d.missedPunchOut ? " · missed check-out" : ""}` : d.status,
+  }));
   return (
     <>
       <PageHead title="Attendance" sub={`Your shift: ${user?.workStartTime ?? "09:30"} – ${user?.workEndTime ?? "18:30"}`} />
@@ -124,6 +142,19 @@ export default function AttendancePage() {
         {state === "in" && !showCheckout && <button className="btn" disabled={busy} onClick={() => setShowCheckout(true)}>Check out</button>}
         {state === "in" && showCheckout && <form className="grid-form" onSubmit={checkOut}><label className="span">{needsCheckoutReason ? "Early check-out clarification" : "Check-out note (optional)"}<small>{needsCheckoutReason ? `You need to complete your assigned hours by ${completedAtLabel}, or provide a clarification.` : "Your assigned shift hours are complete."}</small><input autoFocus required={needsCheckoutReason} value={checkoutReason} onChange={(e) => setCheckoutReason(e.target.value)} minLength={checkoutReason ? 3 : undefined} maxLength={500} placeholder={needsCheckoutReason ? "Explain why you need to leave before completing your shift" : "Add an optional note"} /></label><button className="btn primary" disabled={busy}>Confirm check out</button><button type="button" className="btn ghost" disabled={busy} onClick={() => setShowCheckout(false)}>Cancel</button></form>}
         {state === "done" && <span className="pill approved">Done for today</span>}
+      </Card>
+      <Card>
+        <h3>My attendance this month</h3>
+        {!month ? <Skeleton rows={3} /> : <>
+          <div className="drawer-kpis">
+            <div className="kpi"><span className="kpi-num">{month.summary.present}<em>/{month.summary.workingDays}</em></span><small>Present / working days</small></div>
+            <div className="kpi"><span className="kpi-num">{(month.summary.minutes / 60).toFixed(1)}<em>h</em></span><small>Hours worked</small></div>
+            <div className="kpi"><span className="kpi-num">{month.summary.rate}<em>%</em></span><small>Attendance rate</small></div>
+            <div className="kpi"><span className="kpi-num">{month.summary.incomplete}</span><small>Incomplete punches</small></div>
+          </div>
+          <h3>Daily hours</h3>
+          <ColumnChart bars={monthBars} label="Your daily hours for this month" height={170} />
+        </>}
       </Card>
       <Card>
         <h3>Attendance correction</h3>

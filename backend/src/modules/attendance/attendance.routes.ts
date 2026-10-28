@@ -3,13 +3,14 @@ import { z } from "zod";
 import Attendance from "../../models/Attendance.js";
 import AttendanceRegularization from "../../models/AttendanceRegularization.js";
 import Holiday from "../../models/Holiday.js";
+import LeaveRequest from "../../models/LeaveRequest.js";
 import Notification from "../../models/Notification.js";
 import User from "../../models/User.js";
 import { requireAuth } from "../../middleware/require-auth.js";
 import { requireRole } from "../../middleware/require-role.js";
 import { audit } from "../../utils/audit.js";
-import { firstOpenPunch } from "../../utils/attendance-calc.js";
-import { dateISOOf, isObjectId, isRealDate, timeOf, todayISO } from "../../utils/date.js";
+import { buildMonth, firstOpenPunch, type AttRec, type LeaveSpan } from "../../utils/attendance-calc.js";
+import { dateISOOf, isMonthKey, isObjectId, isRealDate, monthBounds, timeOf, todayISO } from "../../utils/date.js";
 
 export const attendanceRouter = Router();
 attendanceRouter.use(requireAuth);
@@ -88,6 +89,23 @@ attendanceRouter.post("/check-out", async (req, res, next) => {
 attendanceRouter.get("/", async (_req, res, next) => {
   try {
     res.json({ records: await Attendance.find({ userId: res.locals.user.id }).sort({ date: -1 }).limit(31).lean() });
+  } catch (e) { next(e); }
+});
+
+/** A personal month view, including live hours for an open punch. */
+attendanceRouter.get("/summary", async (req, res, next) => {
+  try {
+    const month = typeof req.query.month === "string" ? req.query.month : todayISO().slice(0, 7);
+    if (!isMonthKey(month)) { res.status(400).json({ error: "Invalid month" }); return; }
+    const userId = res.locals.user.id as string;
+    const { start, end } = monthBounds(month);
+    const [records, leaves, holidays, employee] = await Promise.all([
+      Attendance.find({ userId, date: { $gte: start, $lte: end } }).select("date checkIn checkOut").lean<AttRec[]>(),
+      LeaveRequest.find({ userId, status: "APPROVED", startDate: { $lte: end }, endDate: { $gte: start } }).select("leaveType startDate endDate halfDay").lean<LeaveSpan[]>(),
+      Holiday.find({ date: { $gte: start, $lte: end } }).select("date").lean<{ date: string }[]>(),
+      User.findById(userId).select("createdAt").lean<{ createdAt?: Date }>(),
+    ]);
+    res.json({ month, ...buildMonth({ month, today: todayISO(), now: new Date(), records, leaves, holidays: new Set(holidays.map((h) => h.date)), joined: employee?.createdAt ? dateISOOf(employee.createdAt) : null }) });
   } catch (e) { next(e); }
 });
 

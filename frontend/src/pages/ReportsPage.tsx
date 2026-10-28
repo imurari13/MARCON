@@ -145,7 +145,7 @@ export default function ReportsPage() {
   }, [data, q, sort]);
 
   const ranking: Bar[] = useMemo(() => [...(data?.employees ?? [])].sort((a, b) => (metric === "hours" ? b.hours - a.hours : b.present - a.present)).slice(0, 12)
-    .map((e) => ({ key: e.id, label: e.name, value: metric === "hours" ? e.hours : e.present, hint: metric === "hours" ? `${e.hours.toFixed(1)} h` : `${e.present} / ${e.calendarDays} calendar days`, tone: e.missedPunchOuts ? "warn" as const : "accent" as const })), [data, metric]);
+    .map((e) => ({ key: e.id, label: e.name, value: metric === "hours" ? e.hours : e.present, hint: metric === "hours" ? `${e.hours.toFixed(1)} h` : `${e.present} / ${e.workingDays} working days`, tone: e.missedPunchOuts ? "warn" as const : "accent" as const })), [data, metric]);
 
   const daily: Bar[] = (data?.daily ?? []).map((d) => ({ key: String(Number(d.date.slice(8))), label: dayLabel(d.date), value: d.checkedIn, faded: !d.working || d.date > (data?.today ?? ""), hint: d.working ? `${d.checkedIn} checked in · ${d.present} completed${d.onLeave ? ` · ${d.onLeave} on leave` : ""}` : "Day off", tone: "accent" }));
 
@@ -180,7 +180,7 @@ export default function ReportsPage() {
           <div className="kpis" data-r>
             <Kpi label="Attendance rate" value={data.totals.rate} suffix="%" />
             <Kpi label="Hours worked" value={data.totals.hours} decimals={1} />
-            <Kpi label="Days present" value={data.totals.present} suffix={`/${data.totals.calendarDays}`} />
+            <Kpi label="Days present" value={data.totals.present} suffix={`/${data.totals.workingDays}`} />
             <Kpi label="Incomplete punches" value={data.totals.incomplete} tone={data.totals.incomplete ? "warn" : undefined} />
             <Kpi label="Leave days" value={data.totals.leave} decimals={data.totals.leave % 1 ? 1 : 0} />
             <Kpi label="Missed punch-outs" value={data.totals.missedPunchOuts} tone={data.totals.missedPunchOuts ? "warn" : undefined} />
@@ -213,7 +213,7 @@ export default function ReportsPage() {
                 <tbody>{rows.map((e) => (
                   <tr key={e.id} className="clickable" tabIndex={0} onClick={() => setOpenId(e.id)} onKeyDown={(ev) => { if (ev.key === "Enter" || ev.key === " ") { ev.preventDefault(); setOpenId(e.id); } }}>
                     <td><div className="who"><Avatar name={e.name} /><div><b>{e.name}</b><small>{e.employeeId} · {e.department}</small></div></div></td>
-                    <td className="num-col">{e.present}<small> / {e.calendarDays} days</small></td>
+                    <td className="num-col">{e.present}<small> / {e.workingDays} working days</small></td>
                     <td className="num-col">{e.incomplete || "—"}</td>
                     <td className="num-col">{e.leave}</td>
                     <td className="num-col">{e.absent}</td>

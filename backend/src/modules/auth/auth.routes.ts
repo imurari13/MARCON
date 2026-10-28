@@ -2,9 +2,7 @@
 import { Router } from "express";
 import bcrypt from "bcryptjs";
 import { z } from "zod";
-import { rateLimit } from "express-rate-limit";
 import User from "../../models/User.js";
-import { env } from "../../config/env.js";
 import crypto from "node:crypto";
 import { requireAuth } from "../../middleware/require-auth.js";
 import { audit } from "../../utils/audit.js";
@@ -18,23 +16,12 @@ authRouter.get("/csrf", (req, res) => {
   res.json({ token: req.session.csrfToken });
 });
 
-const loginLimiter = rateLimit({
-  windowMs: env.LOGIN_RATE_LIMIT_WINDOW_MS,
-  limit: env.LOGIN_RATE_LIMIT_MAX,
-  standardHeaders: "draft-7",
-  legacyHeaders: false,
-  skipSuccessfulRequests: true,
-  message: {
-    error: "Too many login attempts. Try again later.",
-  },
-});
-
 const loginSchema = z.object({
   email: z.string().trim().email().max(254),
   password: z.string().min(1).max(128),
 });
 
-authRouter.post("/login", loginLimiter, async (req, res, next) => {
+authRouter.post("/login", async (req, res, next) => {
   try {
     const parsed = loginSchema.safeParse(req.body);
 

@@ -36,17 +36,6 @@ const schema = z
 
     APP_TIMEZONE: z.string().default("Asia/Kolkata"),
 
-    LOGIN_RATE_LIMIT_WINDOW_MS: z.coerce
-      .number()
-      .positive()
-      .default(900000),
-
-    LOGIN_RATE_LIMIT_MAX: z.coerce
-      .number()
-      .int()
-      .positive()
-      .default(10),
-
     INITIAL_ADMIN_NAME: z.string().optional(),
 
     INITIAL_ADMIN_EMAIL: z.string().email().optional(),

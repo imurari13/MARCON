@@ -11,7 +11,7 @@ React (Vite) + Express + MongoDB (Mongoose), cookie sessions stored in MongoDB.
 Set `APP_TIMEZONE` (default `Asia/Kolkata`) so attendance days roll over at local midnight, not UTC.
 
 ## What works
-- Login / logout, server-side sessions, rate-limited login
+- Login / logout and server-side sessions
 - Overview stats (org-wide for CEO/HR, personal for others)
 - Attendance: check in / check out, 31-day history. If you checked in on an earlier day and never checked out, you can't check in again until you have sent a correction request for that day (the Attendance page shows a banner with a one-click "Request correction")
 - Corrections: employees request a missing check-in/out (validated against the day, one pending request per day); CEO/HR approve or reject and the employee is notified

@@ -6,6 +6,8 @@ import { useToast } from "../components/Toast";
 
 type Run = { _id: string; month: string; status: "DRAFT" | "FINALIZED"; items: unknown[] };
 type Payslip = { month: string; status: "FINALIZED"; gross: number; deductions: number; net: number; absentDays: number; lateMarks: number };
+const asAmount = (value: unknown) => typeof value === "number" && Number.isFinite(value) ? value : 0;
+const asCount = (value: unknown) => typeof value === "number" && Number.isFinite(value) ? Math.max(0, value) : 0;
 const currentMonth = () => {
   const now = new Date();
   return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
@@ -21,8 +23,13 @@ export default function PayrollPage() {
   const [downloading, setDownloading] = useState(false);
 
   const load = useCallback(async () => {
-    if (admin) setRuns((await apiRequest<{ runs: Run[] }>("/payroll/runs")).runs);
-    setPayslip((await apiRequest<{ payslip: Payslip | null }>(`/payroll/payslip/${month}`)).payslip);
+    if (admin) {
+      const data = await apiRequest<{ runs?: Run[] }>("/payroll/runs");
+      setRuns(Array.isArray(data.runs) ? data.runs.map(run => ({ ...run, items: Array.isArray(run.items) ? run.items : [] })) : []);
+    }
+    const data = await apiRequest<{ payslip: Payslip | null }>(`/payroll/payslip/${month}`);
+    const raw = data.payslip;
+    setPayslip(raw ? { ...raw, gross: asAmount(raw.gross), deductions: asAmount(raw.deductions), net: asAmount(raw.net), absentDays: asCount(raw.absentDays), lateMarks: asCount(raw.lateMarks) } : null);
   }, [admin, month]);
   useEffect(() => { void load().catch((error: Error) => toast(error.message, "bad")); }, [load, toast]);
 

@@ -28,6 +28,7 @@ test("counts present days, hours, leave and absences for a month so far", () => 
   assert.equal(summary.absent, 5);                    // 3rd, 9th, 12th, 13th and 14th
   assert.equal(summary.minutes, 510 + 540 + 0 + 180);
   assert.equal(summary.missedPunchOuts, 1);
+  assert.equal(summary.incomplete, 2);
   assert.equal(summary.avgMinutes, Math.round((510 + 540) / 2));
   assert.equal(days.find((d) => d.date === "2026-10-02")?.status, "holiday");
   assert.equal(days.find((d) => d.date === "2026-10-03")?.status, "absent");
@@ -46,6 +47,7 @@ test("a check-in-only correction does not count as a full present day", () => {
   });
   assert.equal(days.find((d) => d.date === "2026-10-09")?.status, "incomplete");
   assert.equal(summary.present, 0);
+  assert.equal(summary.incomplete, 1);
   assert.equal(summary.missedPunchOuts, 1);
 });
 

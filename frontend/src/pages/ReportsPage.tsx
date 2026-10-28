@@ -11,17 +11,17 @@ import { countUp } from "../hooks/useMotion";
 import { reduced } from "../lib/gsap";
 import { cap, dayLabel, fmtMinutes, monthLabel, shiftMonth } from "../lib/format";
 
-interface EmpRow { id: string; employeeId: string; name: string; role: string; department: string; workingDays: number; calendarDays: number; present: number; leave: number; absent: number; minutes: number; avgMinutes: number; missedPunchOuts: number; rate: number; calendarRate: number; hours: number }
+interface EmpRow { id: string; employeeId: string; name: string; role: string; department: string; workingDays: number; calendarDays: number; present: number; incomplete: number; leave: number; absent: number; minutes: number; avgMinutes: number; missedPunchOuts: number; rate: number; calendarRate: number; hours: number }
 interface MonthData {
   month: string; today: string;
-  totals: { headcount: number; present: number; leave: number; absent: number; hours: number; rate: number; calendarRate: number; missedPunchOuts: number; workingDays: number; calendarDays: number };
-  daily: { date: string; present: number; onLeave: number; working: boolean }[];
+  totals: { headcount: number; present: number; incomplete: number; leave: number; absent: number; hours: number; rate: number; calendarRate: number; missedPunchOuts: number; workingDays: number; calendarDays: number };
+  daily: { date: string; present: number; checkedIn: number; onLeave: number; working: boolean }[];
   employees: EmpRow[];
 }
 interface DayRow { date: string; status: "present" | "incomplete" | "leave" | "holiday" | "weekend" | "absent" | "upcoming" | "na"; checkIn: string | null; checkOut: string | null; minutes: number; missedPunchOut: boolean; leaveType: string | null }
 interface Detail { employee: { id: string; employeeId: string; name: string; role: string; department: string }; summary: Omit<EmpRow, "id" | "employeeId" | "name" | "role" | "department">; days: DayRow[] }
 
-type SortKey = "name" | "present" | "leave" | "absent" | "hours" | "avgMinutes" | "rate";
+type SortKey = "name" | "present" | "incomplete" | "leave" | "absent" | "hours" | "avgMinutes" | "rate";
 const thisMonth = () => new Date().toLocaleDateString("en-CA").slice(0, 7);
 const STATUS_TEXT: Record<DayRow["status"], string> = { present: "Present", incomplete: "Incomplete punch", leave: "On leave", holiday: "Holiday", weekend: "Weekend", absent: "Absent", upcoming: "Upcoming", na: "—" };
 
@@ -85,6 +85,7 @@ function EmployeeDrawer({ month, id, onClose }: { month: string; id: string; onC
           <>
             <div className="drawer-kpis">
               <Kpi label="Days present" value={d.summary.present} />
+              <Kpi label="Incomplete punches" value={d.summary.incomplete} />
               <Kpi label="Hours worked" value={d.summary.minutes / 60} decimals={1} />
               <Kpi label="On leave" value={d.summary.leave} decimals={d.summary.leave % 1 ? 1 : 0} />
               <Kpi label="Absent" value={d.summary.absent} decimals={d.summary.absent % 1 ? 1 : 0} />
@@ -125,9 +126,16 @@ export default function ReportsPage() {
 
   useEffect(() => {
     if (!admin) return;
-    const mine = ++seq.current;
-    setData(null);
-    apiRequest<MonthData>(`/reports/month?month=${month}`).then((r) => { if (mine === seq.current) setData(r); }).catch((e: Error) => { if (mine === seq.current) toast(e.message, "bad"); });
+    const load = (showLoading: boolean) => {
+      const mine = ++seq.current;
+      if (showLoading) setData(null);
+      apiRequest<MonthData>(`/reports/month?month=${month}`).then((r) => { if (mine === seq.current) setData(r); }).catch((e: Error) => { if (mine === seq.current) toast(e.message, "bad"); });
+    };
+    load(true);
+    // Live check-ins affect the current month only; refresh without interrupting the report view.
+    if (month !== thisMonth()) return;
+    const refresh = window.setInterval(() => load(false), 30_000);
+    return () => window.clearInterval(refresh);
   }, [month, admin, toast]);
 
   const rows = useMemo(() => {
@@ -139,7 +147,7 @@ export default function ReportsPage() {
   const ranking: Bar[] = useMemo(() => [...(data?.employees ?? [])].sort((a, b) => (metric === "hours" ? b.hours - a.hours : b.present - a.present)).slice(0, 12)
     .map((e) => ({ key: e.id, label: e.name, value: metric === "hours" ? e.hours : e.present, hint: metric === "hours" ? `${e.hours.toFixed(1)} h` : `${e.present} / ${e.calendarDays} calendar days`, tone: e.missedPunchOuts ? "warn" as const : "accent" as const })), [data, metric]);
 
-  const daily: Bar[] = (data?.daily ?? []).map((d) => ({ key: String(Number(d.date.slice(8))), label: dayLabel(d.date), value: d.present, faded: !d.working || d.date > (data?.today ?? ""), hint: d.working ? `${d.present} present${d.onLeave ? ` · ${d.onLeave} on leave` : ""}` : "Day off", tone: "accent" }));
+  const daily: Bar[] = (data?.daily ?? []).map((d) => ({ key: String(Number(d.date.slice(8))), label: dayLabel(d.date), value: d.checkedIn, faded: !d.working || d.date > (data?.today ?? ""), hint: d.working ? `${d.checkedIn} checked in · ${d.present} completed${d.onLeave ? ` · ${d.onLeave} on leave` : ""}` : "Day off", tone: "accent" }));
 
   const closeDrawer = useCallback(() => setOpenId(null), []);
   const th = (key: SortKey, text: string, cls = "") => <th className={`sortable ${cls}${sort.key === key ? " on" : ""}`} onClick={() => setSort((s) => ({ key, dir: s.key === key ? (s.dir === 1 ? -1 : 1) : key === "name" ? 1 : -1 }))} aria-sort={sort.key === key ? (sort.dir === 1 ? "ascending" : "descending") : "none"}>{text}<i>{sort.key === key ? (sort.dir === 1 ? "↑" : "↓") : ""}</i></th>;
@@ -173,13 +181,14 @@ export default function ReportsPage() {
             <Kpi label="Attendance rate" value={data.totals.rate} suffix="%" />
             <Kpi label="Hours worked" value={data.totals.hours} decimals={1} />
             <Kpi label="Days present" value={data.totals.present} suffix={`/${data.totals.calendarDays}`} />
+            <Kpi label="Incomplete punches" value={data.totals.incomplete} tone={data.totals.incomplete ? "warn" : undefined} />
             <Kpi label="Leave days" value={data.totals.leave} decimals={data.totals.leave % 1 ? 1 : 0} />
             <Kpi label="Missed punch-outs" value={data.totals.missedPunchOuts} tone={data.totals.missedPunchOuts ? "warn" : undefined} />
           </div>
 
           <Card>
-            <h3>People in each day</h3>
-            <ColumnChart bars={daily} max={Math.max(1, data.totals.headcount)} label="People present per day" />
+            <h3>People checked in each day</h3>
+            <ColumnChart bars={daily} max={Math.max(1, data.totals.headcount)} label="People checked in each day" />
           </Card>
 
           <Card>
@@ -200,11 +209,12 @@ export default function ReportsPage() {
             </div>
             {rows.length === 0 ? <Empty icon={<IconChart />} text={data.employees.length ? "No one matches that search" : "No active people yet"} /> : (
               <div className="table-wrap"><table className="report-table">
-                <thead><tr>{th("name", "Person")}{th("present", "Present", "num-col")}{th("leave", "Leave", "num-col")}{th("absent", "Absent", "num-col")}{th("hours", "Hours", "num-col")}{th("avgMinutes", "Avg / day", "num-col")}{th("rate", "Attendance")}</tr></thead>
+                <thead><tr>{th("name", "Person")}{th("present", "Present", "num-col")}{th("incomplete", "Incomplete", "num-col")}{th("leave", "Leave", "num-col")}{th("absent", "Absent", "num-col")}{th("hours", "Hours", "num-col")}{th("avgMinutes", "Avg / day", "num-col")}{th("rate", "Attendance")}</tr></thead>
                 <tbody>{rows.map((e) => (
                   <tr key={e.id} className="clickable" tabIndex={0} onClick={() => setOpenId(e.id)} onKeyDown={(ev) => { if (ev.key === "Enter" || ev.key === " ") { ev.preventDefault(); setOpenId(e.id); } }}>
                     <td><div className="who"><Avatar name={e.name} /><div><b>{e.name}</b><small>{e.employeeId} · {e.department}</small></div></div></td>
                     <td className="num-col">{e.present}<small> / {e.calendarDays} days</small></td>
+                    <td className="num-col">{e.incomplete || "—"}</td>
                     <td className="num-col">{e.leave}</td>
                     <td className="num-col">{e.absent}</td>
                     <td className="num-col"><b>{e.hours.toFixed(1)}</b>{e.missedPunchOuts > 0 && <span className="flag" title={`${e.missedPunchOuts} missed punch-out${e.missedPunchOuts > 1 ? "s" : ""}`}>!</span>}</td>

@@ -55,10 +55,11 @@ reportsRouter.get("/month", async (req, res, next) => {
     const month = monthParam(req.query.month);
     if (!month) { res.status(400).json({ error: "Invalid month" }); return; }
     const { rows, today } = await loadMonth(month);
-    const totals = rows.reduce((t, r) => ({ present: t.present + r.summary.present, leave: t.leave + r.summary.leave, absent: t.absent + r.summary.absent, minutes: t.minutes + r.summary.minutes, missedPunchOuts: t.missedPunchOuts + r.summary.missedPunchOuts, workingDays: t.workingDays + r.summary.workingDays, calendarDays: t.calendarDays + r.summary.calendarDays }), { present: 0, leave: 0, absent: 0, minutes: 0, missedPunchOuts: 0, workingDays: 0, calendarDays: 0 });
+    const totals = rows.reduce((t, r) => ({ present: t.present + r.summary.present, leave: t.leave + r.summary.leave, absent: t.absent + r.summary.absent, minutes: t.minutes + r.summary.minutes, incomplete: t.incomplete + r.summary.incomplete, missedPunchOuts: t.missedPunchOuts + r.summary.missedPunchOuts, workingDays: t.workingDays + r.summary.workingDays, calendarDays: t.calendarDays + r.summary.calendarDays }), { present: 0, leave: 0, absent: 0, minutes: 0, incomplete: 0, missedPunchOuts: 0, workingDays: 0, calendarDays: 0 });
     const daily = (rows[0]?.days ?? []).map((d, i) => ({
       date: d.date,
       present: rows.filter((r) => r.days[i]?.status === "present").length,
+      checkedIn: rows.filter((r) => r.days[i]?.status === "present" || r.days[i]?.status === "incomplete").length,
       onLeave: rows.filter((r) => r.days[i]?.status === "leave").length,
       working: d.status !== "weekend" && d.status !== "holiday" && d.status !== "na",
     }));
@@ -96,8 +97,8 @@ reportsRouter.get("/export", async (req, res, next) => {
     const book = buildXlsx([
       {
         name: "Summary",
-        columns: [{ header: "Employee ID", width: 14 }, { header: "Name", width: 26 }, { header: "Department", width: 18 }, { header: "Role", width: 11 }, { header: "Working days", width: 14 }, { header: "Present", width: 10 }, { header: "On leave", width: 10 }, { header: "Absent", width: 10 }, { header: "Hours worked", width: 14 }, { header: "Avg hours / day", width: 15 }, { header: "Missed punch-outs", width: 18 }, { header: "Attendance %", width: 14 }],
-        rows: rows.map((r) => [r.employeeId, r.name, r.department, r.role, r.summary.workingDays, r.summary.present, r.summary.leave, r.summary.absent, hours(r.summary.minutes), hours(r.summary.avgMinutes), r.summary.missedPunchOuts, r.summary.rate]),
+        columns: [{ header: "Employee ID", width: 14 }, { header: "Name", width: 26 }, { header: "Department", width: 18 }, { header: "Role", width: 11 }, { header: "Working days", width: 14 }, { header: "Present", width: 10 }, { header: "Incomplete", width: 12 }, { header: "On leave", width: 10 }, { header: "Absent", width: 10 }, { header: "Hours worked", width: 14 }, { header: "Avg hours / day", width: 15 }, { header: "Missed punch-outs", width: 18 }, { header: "Attendance %", width: 14 }],
+        rows: rows.map((r) => [r.employeeId, r.name, r.department, r.role, r.summary.workingDays, r.summary.present, r.summary.incomplete, r.summary.leave, r.summary.absent, hours(r.summary.minutes), hours(r.summary.avgMinutes), r.summary.missedPunchOuts, r.summary.rate]),
       },
       {
         name: "Daily log",

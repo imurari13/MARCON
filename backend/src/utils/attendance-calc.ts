@@ -23,6 +23,7 @@ export interface MonthSummary {
   absent: number;
   minutes: number;
   avgMinutes: number;       // per present day that has a complete punch pair
+  incomplete: number;       // check-ins that still need a check-out
   missedPunchOuts: number;
   rate: number;             // present / workingDays, 0-100
   calendarRate: number;     // present / calendarDays, 0-100
@@ -45,7 +46,7 @@ export function buildMonth(input: MonthInput): { days: DayRow[]; summary: MonthS
   const { start, end } = monthBounds(input.month);
   const byDate = new Map(input.records.map((r) => [r.date, r]));
   const days: DayRow[] = [];
-  const s: MonthSummary = { workingDays: 0, calendarDays: 0, present: 0, leave: 0, absent: 0, minutes: 0, avgMinutes: 0, missedPunchOuts: 0, rate: 0, calendarRate: 0 };
+  const s: MonthSummary = { workingDays: 0, calendarDays: 0, present: 0, leave: 0, absent: 0, minutes: 0, avgMinutes: 0, incomplete: 0, missedPunchOuts: 0, rate: 0, calendarRate: 0 };
   let completeDays = 0, completeMinutes = 0;
 
   for (let d = start; d <= end; d = addDays(d, 1)) {
@@ -72,10 +73,12 @@ export function buildMonth(input: MonthInput): { days: DayRow[]; summary: MonthS
       } else if (d === input.today) {
         // A live shift has not yet earned a completed attendance day.
         row.status = "incomplete";
+        s.incomplete++;
         row.minutes = minutesBetween(rec.checkIn, input.now); // still on the clock
       } else {
         // Do not award a full present day for a correction/check-in with no check-out.
         row.status = "incomplete";
+        s.incomplete++;
         row.missedPunchOut = true; s.missedPunchOuts++;
       }
       s.minutes += row.minutes;

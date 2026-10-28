@@ -13,6 +13,12 @@ import { dateISOOf, isObjectId, isRealDate, timeOf, todayISO } from "../../utils
 
 export const attendanceRouter = Router();
 attendanceRouter.use(requireAuth);
+const LATE_GRACE_MINUTES = 10;
+const minutesOf = (time: string) => {
+  const [hours, minutes] = time.split(":").map(Number);
+  return (hours ?? 0) * 60 + (minutes ?? 0);
+};
+const lateMinutesFor = (checkIn: Date, workStartTime: string) => Math.max(0, minutesOf(timeOf(checkIn)) - minutesOf(workStartTime) - LATE_GRACE_MINUTES);
 
 /**
  * The oldest earlier day on which this person checked in but never checked out, and for which
@@ -40,10 +46,15 @@ attendanceRouter.get("/today", async (_req, res, next) => {
 attendanceRouter.post("/check-in", async (_req, res, next) => {
   try {
     const userId = res.locals.user.id as string;
-    const [holiday, blockedBy] = await Promise.all([Holiday.findOne({ date: todayISO() }).select("name").lean(), unresolvedPunch(userId)]);
+    const [holiday, blockedBy, user] = await Promise.all([Holiday.findOne({ date: todayISO() }).select("name").lean(), unresolvedPunch(userId), User.findById(userId).select("workStartTime").lean()]);
     if (holiday) { res.status(409).json({ error: `Today is a holiday: ${holiday.name}` }); return; }
     if (blockedBy) { res.status(409).json({ error: `You didn't check out on ${blockedBy}. Request a correction for that day first, then you can check in.`, blockedBy }); return; }
-    const rec = await Attendance.findOneAndUpdate({ userId, date: todayISO() }, { $setOnInsert: { checkIn: new Date() } }, { upsert: true, returnDocument: "after" });
+    const checkedInAt = new Date();
+    const rec = await Attendance.findOneAndUpdate(
+      { userId, date: todayISO() },
+      { $setOnInsert: { checkIn: checkedInAt, lateMinutes: lateMinutesFor(checkedInAt, user?.workStartTime ?? "09:30") } },
+      { upsert: true, returnDocument: "after" },
+    );
     res.status(201).json({ record: rec });
   } catch (e) { next(e); }
 });
@@ -54,16 +65,21 @@ attendanceRouter.post("/check-out", async (req, res, next) => {
   try {
     const parsed = checkOutSchema.safeParse(req.body);
     if (!parsed.success) { res.status(400).json({ error: "Enter an early check-out reason of at least 3 characters" }); return; }
-    const user = await User.findById(res.locals.user.id).select("workEndTime").lean();
     const checkedOutAt = new Date();
-    const early = !!user?.workEndTime && timeOf(checkedOutAt) < user.workEndTime;
-    if (early && !parsed.data.reason) { res.status(400).json({ error: "A reason is required when checking out before your scheduled end time" }); return; }
+    const [user, openRecord] = await Promise.all([
+      User.findById(res.locals.user.id).select("workStartTime workEndTime").lean(),
+      Attendance.findOne({ userId: res.locals.user.id, date: todayISO(), checkOut: null }).select("_id checkIn").lean(),
+    ]);
+    if (!openRecord) { res.status(409).json({ error: "No open check-in for today" }); return; }
+    const shiftMinutes = Math.max(1, minutesOf(user?.workEndTime ?? "18:30") - minutesOf(user?.workStartTime ?? "09:30"));
+    const early = checkedOutAt.getTime() - openRecord.checkIn.getTime() < shiftMinutes * 60_000;
+    if (early && !parsed.data.reason) { res.status(400).json({ error: "A clarification is required until you complete your assigned shift hours" }); return; }
     const rec = await Attendance.findOneAndUpdate(
-      { userId: res.locals.user.id, date: todayISO(), checkOut: null },
+      { _id: openRecord._id, checkOut: null },
       { $set: { checkOut: checkedOutAt, earlyCheckoutReason: early ? parsed.data.reason : null } },
       { returnDocument: "after" },
     );
-    if (!rec) { res.status(409).json({ error: "No open check-in for today" }); return; }
+    if (!rec) { res.status(409).json({ error: "Your attendance record changed. Please refresh and try again." }); return; }
     if (early) void audit(req, "ATTENDANCE_EARLY_CHECKOUT", "Attendance", rec.id, { reason: parsed.data.reason });
     res.json({ record: rec });
   } catch (e) { next(e); }
@@ -139,12 +155,18 @@ for (const [action, status] of [["approve", "APPROVED"], ["reject", "REJECTED"]]
       if (!request) { res.status(409).json({ error: "Request is no longer pending, or you cannot review your own" }); return; }
 
       if (status === "APPROVED") {
-        const changes: Record<string, Date> = {};
+        const changes: Record<string, Date | number> = {};
         if (request.requestedCheckIn) changes.checkIn = request.requestedCheckIn;
         if (request.requestedCheckOut) changes.checkOut = request.requestedCheckOut;
-        const existing = await Attendance.findOne({ userId: request.userId, date: request.date }).select("_id");
+        const existing = await Attendance.findOne({ userId: request.userId, date: request.date }).select("_id checkIn").lean();
+        const checkIn = request.requestedCheckIn ?? existing?.checkIn;
+        const employee = await User.findById(request.userId).select("workStartTime").lean();
+        if (checkIn) changes.lateMinutes = lateMinutesFor(checkIn, employee?.workStartTime ?? "09:30");
         if (existing) await Attendance.updateOne({ _id: existing._id }, { $set: changes });
-        else await Attendance.create({ userId: request.userId, date: request.date, checkIn: request.requestedCheckIn ?? request.requestedCheckOut ?? new Date(), ...(request.requestedCheckOut ? { checkOut: request.requestedCheckOut } : {}) });
+        else {
+          const correctedCheckIn = request.requestedCheckIn ?? request.requestedCheckOut ?? new Date();
+          await Attendance.create({ userId: request.userId, date: request.date, checkIn: correctedCheckIn, lateMinutes: lateMinutesFor(correctedCheckIn, employee?.workStartTime ?? "09:30"), ...(request.requestedCheckOut ? { checkOut: request.requestedCheckOut } : {}) });
+        }
       }
       await Notification.create({ userId: request.userId, title: `Attendance correction ${status.toLowerCase()}`, body: `Your correction for ${request.date} was ${status.toLowerCase()}.`, type: "ATTENDANCE", link: "/attendance" });
       void audit(req, status === "APPROVED" ? "ATTENDANCE_CORRECTION_APPROVED" : "ATTENDANCE_CORRECTION_REJECTED", "AttendanceRegularization", request.id, { date: request.date });

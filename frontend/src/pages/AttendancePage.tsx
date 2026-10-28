@@ -9,7 +9,7 @@ import AnalogClock from "../components/AnalogClock";
 import ActionBurst, { type BurstKind } from "../components/ActionBurst";
 import { useAuth } from "../context/AuthContext";
 
-interface Rec { _id: string; date: string; checkIn: string; checkOut: string | null; earlyCheckoutReason?: string | null }
+interface Rec { _id: string; date: string; checkIn: string; checkOut: string | null; lateMinutes?: number; earlyCheckoutReason?: string | null }
 interface Fix { _id: string; date: string; reason: string; status: string; requestedCheckIn?: string | null; requestedCheckOut?: string | null }
 const blankFix = { date: "", requestedCheckIn: "", requestedCheckOut: "", reason: "" };
 /** "YYYY-MM-DDTHH:mm" for a datetime-local input. */
@@ -25,10 +25,12 @@ const dur = (r: Rec) => {
 const mins = (t: string) => { const [h, m] = t.split(":").map(Number); return h * 60 + (m || 0); };
 
 /** Circular shift-progress gauge, drawn with DrawSVG. */
-function ShiftRing({ start, end, now }: { start: string; end: string; now: Date }) {
+function ShiftRing({ start, end, checkIn, now }: { start: string; end: string; checkIn: string | null; now: Date }) {
   const arc = useRef<SVGCircleElement>(null);
   const cur = now.getHours() * 60 + now.getMinutes();
-  const p = Math.max(0, Math.min(1, (cur - mins(start)) / Math.max(1, mins(end) - mins(start))));
+  const checkedInAt = checkIn ? new Date(checkIn) : null;
+  const actualStart = checkedInAt ? checkedInAt.getHours() * 60 + checkedInAt.getMinutes() : mins(start);
+  const p = checkedInAt ? Math.max(0, Math.min(1, (cur - actualStart) / Math.max(1, mins(end) - mins(start)))) : 0;
   const tick = Math.round(p * 200);
   useLayoutEffect(() => { if (arc.current) gsap.set(arc.current, { drawSVG: "0% 0%" }); }, []);
   useEffect(() => {
@@ -37,13 +39,13 @@ function ShiftRing({ start, end, now }: { start: string; end: string; now: Date 
     if (reduced()) gsap.set(arc.current, to); else gsap.to(arc.current, { ...to, duration: 1.8, ease: "expo.out" });
   }, [tick]);
   return (
-    <div className="shift-ring" aria-label={`${Math.round(p * 100)}% of shift elapsed`}>
+    <div className="shift-ring" aria-label={checkedInAt ? `${Math.round(p * 100)}% of work time elapsed since check-in` : "Work progress starts when you check in"}>
       <svg viewBox="0 0 200 200">
         <defs><linearGradient id="rg" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stopColor="#e8392b" /><stop offset="1" stopColor="#ff9a5c" /></linearGradient></defs>
         <circle cx="100" cy="100" r="86" fill="none" stroke="rgba(255,255,255,.07)" strokeWidth="8" />
         <circle ref={arc} cx="100" cy="100" r="86" fill="none" stroke="url(#rg)" strokeWidth="8" strokeLinecap="round" transform="rotate(-90 100 100)" />
       </svg>
-      <div><b>{Math.round(p * 100)}%</b><small>of shift</small></div>
+      <div><b>{Math.round(p * 100)}%</b><small>{checkedInAt ? "since check-in" : "check in to start"}</small></div>
     </div>
   );
 }
@@ -85,6 +87,10 @@ export default function AttendancePage() {
     await act("/attendance/check-out", "out", { reason: checkoutReason || undefined });
   }
   const state = !today ? "out" : today.checkOut ? "done" : "in";
+  const assignedMinutes = Math.max(1, mins(user?.workEndTime ?? "18:30") - mins(user?.workStartTime ?? "09:30"));
+  const completedAt = today ? new Date(new Date(today.checkIn).getTime() + assignedMinutes * 60_000) : null;
+  const needsCheckoutReason = !!completedAt && now < completedAt;
+  const completedAtLabel = completedAt?.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) ?? "the end of your shift";
   async function submitCorrection(event: FormEvent) {
     event.preventDefault();
     try {
@@ -112,10 +118,11 @@ export default function AttendancePage() {
           <small>{now.toLocaleDateString(undefined, { weekday: "long", day: "numeric", month: "long" })}</small>
           <small>{state === "out" ? "You haven't checked in yet" : state === "in" ? `In since ${tm(today!.checkIn)} · ${dur(today!)}` : `Worked ${dur(today!)} today`}</small>
         </div>
-        <ShiftRing start={user?.workStartTime ?? "09:30"} end={user?.workEndTime ?? "18:30"} now={now} />
+        <ShiftRing start={user?.workStartTime ?? "09:30"} end={user?.workEndTime ?? "18:30"} checkIn={today?.checkIn ?? null} now={now} />
+        {state !== "out" && (today?.lateMinutes ?? 0) > 0 && <span className="pill pending">Late by {today!.lateMinutes} min</span>}
         {state === "out" && <button className="btn primary" disabled={busy || !!blockedBy} title={blockedBy ? "Request a correction for your missed check-out first" : undefined} onClick={() => void act("/attendance/check-in", "in")}>Check in</button>}
         {state === "in" && !showCheckout && <button className="btn" disabled={busy} onClick={() => setShowCheckout(true)}>Check out</button>}
-        {state === "in" && showCheckout && <form className="grid-form" onSubmit={checkOut}><label className="span">Early check-out reason <small>(required before your scheduled end time)</small><input autoFocus value={checkoutReason} onChange={(e) => setCheckoutReason(e.target.value)} minLength={checkoutReason ? 3 : undefined} maxLength={500} placeholder="Why are you leaving early?" /></label><button className="btn primary" disabled={busy}>Confirm check out</button><button type="button" className="btn ghost" disabled={busy} onClick={() => setShowCheckout(false)}>Cancel</button></form>}
+        {state === "in" && showCheckout && <form className="grid-form" onSubmit={checkOut}><label className="span">{needsCheckoutReason ? "Early check-out clarification" : "Check-out note (optional)"}<small>{needsCheckoutReason ? `You need to complete your assigned hours by ${completedAtLabel}, or provide a clarification.` : "Your assigned shift hours are complete."}</small><input autoFocus required={needsCheckoutReason} value={checkoutReason} onChange={(e) => setCheckoutReason(e.target.value)} minLength={checkoutReason ? 3 : undefined} maxLength={500} placeholder={needsCheckoutReason ? "Explain why you need to leave before completing your shift" : "Add an optional note"} /></label><button className="btn primary" disabled={busy}>Confirm check out</button><button type="button" className="btn ghost" disabled={busy} onClick={() => setShowCheckout(false)}>Cancel</button></form>}
         {state === "done" && <span className="pill approved">Done for today</span>}
       </Card>
       <Card>
@@ -138,7 +145,7 @@ export default function AttendancePage() {
         <h3>Recent days</h3>
         {!rows ? <Skeleton /> : rows.length === 0 ? <Empty icon={<IconClock />} text="No attendance yet" /> : (
           <div className="table-wrap"><table><thead><tr><th>Date</th><th>In</th><th>Out</th><th>Total</th></tr></thead>
-            <tbody>{rows.map((r) => <tr key={r._id}><td>{r.date}</td><td>{tm(r.checkIn)}</td><td>{tm(r.checkOut)}{!r.checkOut && r.date !== todayKey() && <span className="flag" title="No check-out recorded">!</span>}{r.earlyCheckoutReason && <small className="mute"> · {r.earlyCheckoutReason}</small>}</td><td>{dur(r)}</td></tr>)}</tbody></table></div>
+            <tbody>{rows.map((r) => <tr key={r._id}><td>{r.date}</td><td>{tm(r.checkIn)}{(r.lateMinutes ?? 0) > 0 && <small className="late-note"> · late {r.lateMinutes}m</small>}</td><td>{tm(r.checkOut)}{!r.checkOut && r.date !== todayKey() && <span className="flag" title="No check-out recorded">!</span>}{r.earlyCheckoutReason && <small className="mute"> · {r.earlyCheckoutReason}</small>}</td><td>{dur(r)}</td></tr>)}</tbody></table></div>
         )}
       </Card>
       {burst && <ActionBurst kind={burst.kind} caption={burst.caption} onDone={() => setBurst(null)} />}

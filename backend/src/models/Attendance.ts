@@ -5,6 +5,8 @@ export interface IAttendance extends Document {
   date: string; // YYYY-MM-DD
   checkIn: Date;
   checkOut?: Date | null;
+  /** Minutes beyond the allowed check-in grace period; zero means on time. */
+  lateMinutes: number;
   earlyCheckoutReason?: string | null;
 }
 
@@ -14,6 +16,7 @@ const schema = new Schema<IAttendance>(
     date: { type: String, required: true },
     checkIn: { type: Date, required: true },
     checkOut: { type: Date, default: null },
+    lateMinutes: { type: Number, default: 0, min: 0 },
     earlyCheckoutReason: { type: String, trim: true, maxlength: 500, default: null },
   },
   { timestamps: true }

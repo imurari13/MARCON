@@ -4,7 +4,7 @@ import Attendance from "../../models/Attendance.js";
 import LeaveRequest from "../../models/LeaveRequest.js";
 import Holiday from "../../models/Holiday.js";
 import { requireAuth } from "../../middleware/require-auth.js";
-import { addDays, isWeekend, todayISO } from "../../utils/date.js";
+import { addDays, isCompanyWeeklyHoliday, todayISO } from "../../utils/date.js";
 
 export const dashboardRouter = Router();
 dashboardRouter.use(requireAuth);
@@ -65,7 +65,7 @@ dashboardRouter.get("/", async (_req, res, next) => {
     const mine = { present: 0, onLeave: 0, holiday: 0, absent: 0 };
     for (let d = monthStart; d <= date; d = addDays(d, 1)) {
       if (present.has(d)) { mine.present++; continue; }
-      if (isWeekend(d)) continue;
+      if (isCompanyWeeklyHoliday(d)) { mine.holiday++; continue; }
       if (holidays.has(d)) { mine.holiday++; continue; }
       const leave = monthLeaves.find((l) => l.startDate <= d && l.endDate >= d);
       if (leave) { mine.onLeave += leave.halfDay ? 0.5 : 1; continue; }
@@ -73,7 +73,7 @@ dashboardRouter.get("/", async (_req, res, next) => {
     }
     const byStatus = tally(myLeaves.map((l) => l.status));
     const charts: { id: string; title: string; slices: Slice[] }[] = [
-      { id: "my-month", title: "My month so far", slices: [
+      { id: "my-month", title: `My month so far · ${mine.present} / ${Math.max(1, Math.floor((new Date(`${date}T00:00:00Z`).getTime() - new Date(`${monthStart}T00:00:00Z`).getTime()) / 86_400_000) + 1)} calendar days present`, slices: [
         { label: "Present", value: mine.present, tone: "ok" }, { label: "On leave", value: mine.onLeave, tone: "info" },
         { label: "Holiday", value: mine.holiday, tone: "warn" }, { label: "Absent", value: mine.absent, tone: "bad" } ] },
       { id: "my-leave", title: "My leave requests", slices: [
@@ -95,7 +95,7 @@ dashboardRouter.get("/", async (_req, res, next) => {
     ]);
     const presentSet = new Set(presentIds.map((r) => String(r.userId)));
     const presentToday = presentSet.size;
-    const dayOff = isWeekend(date) || !!todayHoliday;
+    const dayOff = isCompanyWeeklyHoliday(date) || !!todayHoliday;
     type Who = { name: string; employeeId: string; department?: string | null; isActive: boolean };
     const person = (r: { userId: unknown }) => (r.userId && typeof r.userId === "object" && "name" in r.userId ? r.userId as Who : null);
     const shape = (r: (typeof leavesNow)[number]) => {

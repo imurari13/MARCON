@@ -124,7 +124,7 @@ attendanceRouter.post("/regularizations", async (req, res, next) => {
     if (checkIn && checkOut && checkOut <= checkIn) { res.status(400).json({ error: "Check-out must be after check-in" }); return; }
 
     const existing = await Attendance.findOne({ userId, date }).select("checkIn checkOut");
-    if (!existing && !checkIn) { res.status(400).json({ error: "You have no check-in on that day, so the correction needs a check-in time too" }); return; }
+    if (!existing && (!checkIn || !checkOut)) { res.status(400).json({ error: "You have no attendance on that day, so the correction needs both check-in and check-out times" }); return; }
     const inFinal = checkIn ?? existing?.checkIn;
     if (checkOut && inFinal && checkOut <= inFinal) { res.status(400).json({ error: "Check-out must be after check-in" }); return; }
     if (await AttendanceRegularization.exists({ userId, date, status: "PENDING" })) { res.status(409).json({ error: "You already have a pending correction for that day" }); return; }

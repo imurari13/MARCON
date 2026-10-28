@@ -8,7 +8,7 @@ import LeaveRequest from "../../models/LeaveRequest.js";
 import Holiday from "../../models/Holiday.js";
 import { requireAuth } from "../../middleware/require-auth.js";
 import { requireRole } from "../../middleware/require-role.js";
-import { isObjectId, timeOf } from "../../utils/date.js";
+import { isCompanyWeeklyHoliday, isObjectId, timeOf } from "../../utils/date.js";
 import { audit } from "../../utils/audit.js";
 import { payslipPdf } from "../../utils/payslip-pdf.js";
 
@@ -60,8 +60,7 @@ payrollRouter.post("/runs", requireRole("CEO", "HR"), async (req, res, next) => 
     const [year, mon] = month.split("-").map(Number) as [number, number];
     const daysInMonth = new Date(Date.UTC(year, mon, 0)).getUTCDate();
     const workdays = Array.from({ length: daysInMonth }, (_, index) => `${month}-${String(index + 1).padStart(2, "0")}`).filter(date => {
-      const day = new Date(`${date}T00:00:00Z`).getUTCDay();
-      return day !== 0 && day !== 6 && !holidaySet.has(date);
+      return !isCompanyWeeklyHoliday(date) && !holidaySet.has(date);
     });
     const items = await Promise.all(users.map(async user => {
       const salary = salaries.get(user.id);

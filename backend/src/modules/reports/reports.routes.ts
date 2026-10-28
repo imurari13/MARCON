@@ -55,7 +55,7 @@ reportsRouter.get("/month", async (req, res, next) => {
     const month = monthParam(req.query.month);
     if (!month) { res.status(400).json({ error: "Invalid month" }); return; }
     const { rows, today } = await loadMonth(month);
-    const totals = rows.reduce((t, r) => ({ present: t.present + r.summary.present, leave: t.leave + r.summary.leave, absent: t.absent + r.summary.absent, minutes: t.minutes + r.summary.minutes, missedPunchOuts: t.missedPunchOuts + r.summary.missedPunchOuts, workingDays: t.workingDays + r.summary.workingDays }), { present: 0, leave: 0, absent: 0, minutes: 0, missedPunchOuts: 0, workingDays: 0 });
+    const totals = rows.reduce((t, r) => ({ present: t.present + r.summary.present, leave: t.leave + r.summary.leave, absent: t.absent + r.summary.absent, minutes: t.minutes + r.summary.minutes, missedPunchOuts: t.missedPunchOuts + r.summary.missedPunchOuts, workingDays: t.workingDays + r.summary.workingDays, calendarDays: t.calendarDays + r.summary.calendarDays }), { present: 0, leave: 0, absent: 0, minutes: 0, missedPunchOuts: 0, workingDays: 0, calendarDays: 0 });
     const daily = (rows[0]?.days ?? []).map((d, i) => ({
       date: d.date,
       present: rows.filter((r) => r.days[i]?.status === "present").length,
@@ -64,7 +64,7 @@ reportsRouter.get("/month", async (req, res, next) => {
     }));
     res.json({
       month, today,
-      totals: { headcount: rows.length, ...totals, hours: hours(totals.minutes), rate: totals.workingDays ? Math.min(100, Math.round((totals.present / totals.workingDays) * 100)) : 0 },
+      totals: { headcount: rows.length, ...totals, hours: hours(totals.minutes), rate: totals.workingDays ? Math.min(100, Math.round((totals.present / totals.workingDays) * 100)) : 0, calendarRate: totals.calendarDays ? Math.min(100, Math.round((totals.present / totals.calendarDays) * 100)) : 0 },
       daily,
       employees: rows.map((r) => ({ id: r.id, employeeId: r.employeeId, name: r.name, role: r.role, department: r.department, ...r.summary, hours: hours(r.summary.minutes) })),
     });
@@ -91,7 +91,7 @@ reportsRouter.get("/export", async (req, res, next) => {
     if (!month) { res.status(400).json({ error: "Invalid month" }); return; }
     const { rows, leaves, people } = await loadMonth(month);
     const nameOf = new Map(people.map((p) => [p._id.toString(), p]));
-    const label: Record<string, string> = { present: "Present", leave: "On leave", holiday: "Holiday", weekend: "Weekend", absent: "Absent", upcoming: "Upcoming", na: "—" };
+    const label: Record<string, string> = { present: "Present", incomplete: "Incomplete", leave: "On leave", holiday: "Holiday", weekend: "Weekend", absent: "Absent", upcoming: "Upcoming", na: "—" };
 
     const book = buildXlsx([
       {

@@ -37,6 +37,13 @@ export const isWeekend = (iso: string): boolean => {
   return w === 0 || w === 6;
 };
 
+/** Company weekly holidays: every Sunday and the second Saturday of each month. */
+export const isCompanyWeeklyHoliday = (iso: string): boolean => {
+  const date = new Date(`${iso}T00:00:00Z`);
+  const weekday = date.getUTCDay();
+  return weekday === 0 || (weekday === 6 && date.getUTCDate() >= 8 && date.getUTCDate() <= 14);
+};
+
 export const isMonthKey = (value: string): boolean => /^\d{4}-(0[1-9]|1[0-2])$/.test(value);
 
 /** First and last calendar day of a YYYY-MM month. */

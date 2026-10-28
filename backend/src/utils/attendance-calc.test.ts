@@ -20,18 +20,33 @@ test("counts present days, hours, leave and absences for a month so far", () => 
     ],
     leaves: [{ startDate: "2026-10-07", endDate: "2026-10-08", halfDay: false, leaveType: "SICK" }],
   });
-  // Weekdays 1-15 Oct 2026 minus the 2nd (holiday) = 10 working days.
-  assert.equal(summary.workingDays, 10);
-  assert.equal(summary.present, 4);
+  // Sundays and the second Saturday are weekly holidays; 3 Oct remains a working Saturday.
+  assert.equal(summary.workingDays, 11);
+  assert.equal(summary.calendarDays, 15);
+  assert.equal(summary.present, 2);
   assert.equal(summary.leave, 2);
-  assert.equal(summary.absent, 4);                    // 9th, 12th, 13th and 14th
+  assert.equal(summary.absent, 5);                    // 3rd, 9th, 12th, 13th and 14th
   assert.equal(summary.minutes, 510 + 540 + 0 + 180);
   assert.equal(summary.missedPunchOuts, 1);
   assert.equal(summary.avgMinutes, Math.round((510 + 540) / 2));
   assert.equal(days.find((d) => d.date === "2026-10-02")?.status, "holiday");
-  assert.equal(days.find((d) => d.date === "2026-10-03")?.status, "weekend");
+  assert.equal(days.find((d) => d.date === "2026-10-03")?.status, "absent");
+  assert.equal(days.find((d) => d.date === "2026-10-10")?.status, "holiday");
   assert.equal(days.find((d) => d.date === "2026-10-06")?.missedPunchOut, true);
+  assert.equal(days.find((d) => d.date === "2026-10-06")?.status, "incomplete");
+  assert.equal(days.find((d) => d.date === "2026-10-15")?.status, "incomplete");
   assert.equal(days.find((d) => d.date === "2026-10-20")?.status, "upcoming");
+});
+
+test("a check-in-only correction does not count as a full present day", () => {
+  const { summary, days } = buildMonth({
+    ...base,
+    records: [{ date: "2026-10-09", checkIn: at("2026-10-09", "09:30") }],
+    leaves: [],
+  });
+  assert.equal(days.find((d) => d.date === "2026-10-09")?.status, "incomplete");
+  assert.equal(summary.present, 0);
+  assert.equal(summary.missedPunchOuts, 1);
 });
 
 test("today without a check-in is not yet absent", () => {

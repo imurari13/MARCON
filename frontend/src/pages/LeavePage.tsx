@@ -12,6 +12,7 @@ export default function LeavePage() {
   const { user } = useAuth();
   const toast = useToast();
   const reviewer = user?.role === "CEO" || user?.role === "HR" || user?.role === "MANAGER";
+  const canReview = (status: string) => user?.role === "MANAGER" ? status === "PENDING_MANAGER" : ["PENDING", "PENDING_HR"].includes(status);
   const [mine, setMine] = useState<Req[] | null>(null);
   const [all, setAll] = useState<Req[] | null>(null);
   const [balances, setBalances] = useState<{ leaveType: string; quota: number; used: number; remaining: number }[] | null>(null);
@@ -66,7 +67,7 @@ export default function LeavePage() {
               <tr key={r._id}>
                 <td><b>{typeof r.userId === "object" && r.userId ? r.userId.name : "Former employee"}</b></td><td>{cap(r.leaveType)}</td><td>{r.startDate} → {r.endDate}{r.halfDay && <small> · half day</small>}</td>
                 <td><Pill s={r.status} /></td>
-                <td className="right">{["PENDING", "PENDING_MANAGER", "PENDING_HR"].includes(r.status) && !(typeof r.userId === "object" && r.userId?._id === user?.id) && <><button className="btn sm" onClick={() => void review(r._id, "approve")}>Approve</button> <button className="btn sm ghost" onClick={() => void review(r._id, "reject")}>Reject</button></>}</td>
+                <td className="right">{canReview(r.status) && !(typeof r.userId === "object" && r.userId?._id === user?.id) && <><button className="btn sm" onClick={() => void review(r._id, "approve")}>Approve</button> <button className="btn sm ghost" onClick={() => void review(r._id, "reject")}>Reject</button></>}</td>
               </tr>))}</tbody></table></div>
           )}
         </Card>

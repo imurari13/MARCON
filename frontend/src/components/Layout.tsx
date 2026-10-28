@@ -53,9 +53,11 @@ export default function Layout() {
   const link = (to: string, icon: ReactNode, label: string) => <NavLink to={to}>{icon}<span>{label}</span></NavLink>;
   const more_links: [string, ReactNode, string][] = [
     ["/holidays", <IconCalendarDays />, "Holidays"],
+    ["/work-from-home", <IconBriefcase />, "Work from home"],
     ...(admin ? ([["/employees", <IconUsers />, "People"], ["/admin", <IconSettings />, "Admin"], ["/reports", <IconChart />, "Reports"], ["/corrections", <IconClock />, "Corrections"]] as [string, ReactNode, string][]) : []),
     ["/work", <IconBriefcase />, "Work hub"], ["/updates", <IconBell />, "Updates"], ["/payroll", <IconBriefcase />, "Payroll"], ["/documents", <IconBriefcase />, "Documents"],
     ["/performance", <IconUsers />, "Performance"], ["/operations", <IconSettings />, "Operations"], ["/security", <IconShield />, "Security"],
+    ["/profile", <IconUsers />, "My profile"],
   ];
   const tab = (to: string, icon: ReactNode, label: string) => <NavLink to={to} className="tab">{icon}<span>{label}</span></NavLink>;
 
@@ -73,6 +75,7 @@ export default function Layout() {
             {link("/dashboard", <IconHome />, "Overview")}
             {link("/attendance", <IconClock />, "Attendance")}
             {link("/leave", <IconCalendar />, "Leave")}
+            {link("/work-from-home", <IconBriefcase />, "Work from home")}
             {link("/calendar", <IconCalendarDays />, "Calendar")}
             {link("/holidays", <IconCalendarDays />, "Holidays")}
             {admin && link("/employees", <IconUsers />, "People")}
@@ -86,6 +89,7 @@ export default function Layout() {
             <>{link("/payroll", <IconBriefcase />, "Payroll")}</>
             <>{link("/documents", <IconBriefcase />, "Documents")}</>
             <>{link("/performance", <IconUsers />, "Performance")}</>
+            <>{link("/profile", <IconUsers />, "My profile")}</>
           </nav>
           <div className="side-foot">
             <div className="me">

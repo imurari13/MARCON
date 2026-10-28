@@ -5,6 +5,7 @@ export interface IAttendance extends Document {
   date: string; // YYYY-MM-DD
   checkIn: Date;
   checkOut?: Date | null;
+  earlyCheckoutReason?: string | null;
 }
 
 const schema = new Schema<IAttendance>(
@@ -13,6 +14,7 @@ const schema = new Schema<IAttendance>(
     date: { type: String, required: true },
     checkIn: { type: Date, required: true },
     checkOut: { type: Date, default: null },
+    earlyCheckoutReason: { type: String, trim: true, maxlength: 500, default: null },
   },
   { timestamps: true }
 );

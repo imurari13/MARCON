@@ -39,7 +39,7 @@ dashboardRouter.get("/", async (_req, res, next) => {
       Attendance.exists({ userId: u.id, date }),
       LeaveRequest.find({ userId: u.id }).select("status leaveType").limit(500).lean(),
       Attendance.find({ userId: u.id, date: { $gte: monthStart, $lte: date } }).select("date").lean(),
-      LeaveRequest.find({ userId: u.id, status: "APPROVED", startDate: { $lte: date }, endDate: { $gte: monthStart } }).select("startDate endDate").lean(),
+      LeaveRequest.find({ userId: u.id, status: "APPROVED", startDate: { $lte: date }, endDate: { $gte: monthStart } }).select("startDate endDate halfDay").lean(),
       Holiday.find({ date: { $gte: monthStart, $lte: date } }).select("date").lean(),
       Holiday.exists({ date }),
       User.find({ isActive: true, dateOfBirth: { $ne: null } }).select("name dateOfBirth").lean(),
@@ -67,7 +67,8 @@ dashboardRouter.get("/", async (_req, res, next) => {
       if (present.has(d)) { mine.present++; continue; }
       if (isWeekend(d)) continue;
       if (holidays.has(d)) { mine.holiday++; continue; }
-      if (monthLeaves.some((l) => l.startDate <= d && l.endDate >= d)) { mine.onLeave++; continue; }
+      const leave = monthLeaves.find((l) => l.startDate <= d && l.endDate >= d);
+      if (leave) { mine.onLeave += leave.halfDay ? 0.5 : 1; continue; }
       if (d < date) mine.absent++; // today is not "absent" until the day is over
     }
     const byStatus = tally(myLeaves.map((l) => l.status));
@@ -103,7 +104,7 @@ dashboardRouter.get("/", async (_req, res, next) => {
     };
     const onLeaveToday = dayOff ? [] : leavesNow.map(shape).filter((x): x is NonNullable<ReturnType<typeof shape>> => x !== null);
     const upcomingLeave = leavesSoon.map(shape).filter((x): x is NonNullable<ReturnType<typeof shape>> => x !== null);
-    const onLeave = dayOff ? 0 : leavesNow.filter((r) => { const p = person(r); return p && p.isActive && !presentSet.has(String((r.userId as unknown as { _id: unknown })._id)); }).length;
+    const onLeave = dayOff ? 0 : leavesNow.reduce((total, r) => { const p = person(r); return total + (p && p.isActive && !presentSet.has(String((r.userId as unknown as { _id: unknown })._id)) ? (r.halfDay ? 0.5 : 1) : 0); }, 0);
     const rest = Math.max(0, headcount - presentToday - onLeave);
     const leaveCount = Object.fromEntries(leaveAgg.map((r) => [r._id, r.n])) as Record<string, number>;
     const roleTone: Record<string, Tone> = { CEO: "accent", HR: "warn", MANAGER: "info", EMPLOYEE: "ok" };

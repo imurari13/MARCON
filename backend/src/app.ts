@@ -26,6 +26,7 @@ import { organizationsRouter } from "./modules/organizations/organizations.route
 import { analyticsRouter } from "./modules/analytics/analytics.routes.js";
 import { performanceRouter } from "./modules/performance/performance.routes.js";
 import { reportsRouter } from "./modules/reports/reports.routes.js";
+import { workFromHomeRouter } from "./modules/work-from-home/work-from-home.routes.js";
 import type { MongoClient } from "mongodb";
 import { tenants } from "./tenancy/context.js";
 
@@ -117,6 +118,7 @@ export function createApp(mongoClient: MongoClient) {
   app.use("/api/dashboard", dashboardRouter);
   app.use("/api/attendance", attendanceRouter);
   app.use("/api/leave", leaveRouter);
+  app.use("/api/work-from-home", workFromHomeRouter);
   app.use("/api/employees", employeesRouter);
   app.use("/api/departments", departmentsRouter);
   app.use("/api/audit", auditRouter);

@@ -9,7 +9,7 @@ import { requireAuth } from "../../middleware/require-auth.js";
 import { requireRole } from "../../middleware/require-role.js";
 import { audit } from "../../utils/audit.js";
 import { firstOpenPunch } from "../../utils/attendance-calc.js";
-import { dateISOOf, isObjectId, isRealDate, todayISO } from "../../utils/date.js";
+import { dateISOOf, isObjectId, isRealDate, timeOf, todayISO } from "../../utils/date.js";
 
 export const attendanceRouter = Router();
 attendanceRouter.use(requireAuth);
@@ -48,10 +48,23 @@ attendanceRouter.post("/check-in", async (_req, res, next) => {
   } catch (e) { next(e); }
 });
 
-attendanceRouter.post("/check-out", async (_req, res, next) => {
+const checkOutSchema = z.object({ reason: z.string().trim().min(3).max(500).optional() });
+
+attendanceRouter.post("/check-out", async (req, res, next) => {
   try {
-    const rec = await Attendance.findOneAndUpdate({ userId: res.locals.user.id, date: todayISO(), checkOut: null }, { $set: { checkOut: new Date() } }, { returnDocument: "after" });
+    const parsed = checkOutSchema.safeParse(req.body);
+    if (!parsed.success) { res.status(400).json({ error: "Enter an early check-out reason of at least 3 characters" }); return; }
+    const user = await User.findById(res.locals.user.id).select("workEndTime").lean();
+    const checkedOutAt = new Date();
+    const early = !!user?.workEndTime && timeOf(checkedOutAt) < user.workEndTime;
+    if (early && !parsed.data.reason) { res.status(400).json({ error: "A reason is required when checking out before your scheduled end time" }); return; }
+    const rec = await Attendance.findOneAndUpdate(
+      { userId: res.locals.user.id, date: todayISO(), checkOut: null },
+      { $set: { checkOut: checkedOutAt, earlyCheckoutReason: early ? parsed.data.reason : null } },
+      { returnDocument: "after" },
+    );
     if (!rec) { res.status(409).json({ error: "No open check-in for today" }); return; }
+    if (early) void audit(req, "ATTENDANCE_EARLY_CHECKOUT", "Attendance", rec.id, { reason: parsed.data.reason });
     res.json({ record: rec });
   } catch (e) { next(e); }
 });

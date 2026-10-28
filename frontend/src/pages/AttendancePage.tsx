@@ -9,7 +9,7 @@ import AnalogClock from "../components/AnalogClock";
 import ActionBurst, { type BurstKind } from "../components/ActionBurst";
 import { useAuth } from "../context/AuthContext";
 
-interface Rec { _id: string; date: string; checkIn: string; checkOut: string | null }
+interface Rec { _id: string; date: string; checkIn: string; checkOut: string | null; earlyCheckoutReason?: string | null }
 interface Fix { _id: string; date: string; reason: string; status: string; requestedCheckIn?: string | null; requestedCheckOut?: string | null }
 const blankFix = { date: "", requestedCheckIn: "", requestedCheckOut: "", reason: "" };
 /** "YYYY-MM-DDTHH:mm" for a datetime-local input. */
@@ -59,6 +59,8 @@ export default function AttendancePage() {
   const [correction, setCorrection] = useState(blankFix);
   const [blockedBy, setBlockedBy] = useState<string | null>(null);
   const [fixes, setFixes] = useState<Fix[] | null>(null);
+  const [checkoutReason, setCheckoutReason] = useState("");
+  const [showCheckout, setShowCheckout] = useState(false);
   const form = useRef<HTMLFormElement>(null);
   const load = useCallback(async () => {
     const [a, b, c] = await Promise.all([apiRequest<{ record: Rec | null; blockedBy: string | null }>("/attendance/today"), apiRequest<{ records: Rec[] }>("/attendance"), apiRequest<{ requests: Fix[] }>("/attendance/regularizations/mine")]);
@@ -67,15 +69,20 @@ export default function AttendancePage() {
   useEffect(() => { load().catch((e: Error) => toast(e.message, "bad")); }, [load, toast]);
   useEffect(() => { const i = setInterval(() => setNow(new Date()), 1000); return () => clearInterval(i); }, []);
 
-  async function act(path: string, kind: BurstKind) {
+  async function act(path: string, kind: BurstKind, body?: unknown) {
     setBusy(true);
     try {
-      const { record } = await apiRequest<{ record: Rec }>(path, { method: "POST" });
+      const { record } = await apiRequest<{ record: Rec }>(path, { method: "POST", ...(body === undefined ? {} : { body: JSON.stringify(body) }) });
       await load();
+      setShowCheckout(false); setCheckoutReason("");
       setBurst({ kind, caption: kind === "in" ? `Checked in at ${tm(record.checkIn)}` : `You worked ${dur(record)} today` });
     }
     catch (e) { toast((e as Error).message, "bad"); }
     finally { setBusy(false); }
+  }
+  async function checkOut(event: FormEvent) {
+    event.preventDefault();
+    await act("/attendance/check-out", "out", { reason: checkoutReason || undefined });
   }
   const state = !today ? "out" : today.checkOut ? "done" : "in";
   async function submitCorrection(event: FormEvent) {
@@ -107,7 +114,8 @@ export default function AttendancePage() {
         </div>
         <ShiftRing start={user?.workStartTime ?? "09:30"} end={user?.workEndTime ?? "18:30"} now={now} />
         {state === "out" && <button className="btn primary" disabled={busy || !!blockedBy} title={blockedBy ? "Request a correction for your missed check-out first" : undefined} onClick={() => void act("/attendance/check-in", "in")}>Check in</button>}
-        {state === "in" && <button className="btn" disabled={busy} onClick={() => void act("/attendance/check-out", "out")}>Check out</button>}
+        {state === "in" && !showCheckout && <button className="btn" disabled={busy} onClick={() => setShowCheckout(true)}>Check out</button>}
+        {state === "in" && showCheckout && <form className="grid-form" onSubmit={checkOut}><label className="span">Early check-out reason <small>(required before your scheduled end time)</small><input autoFocus value={checkoutReason} onChange={(e) => setCheckoutReason(e.target.value)} minLength={checkoutReason ? 3 : undefined} maxLength={500} placeholder="Why are you leaving early?" /></label><button className="btn primary" disabled={busy}>Confirm check out</button><button type="button" className="btn ghost" disabled={busy} onClick={() => setShowCheckout(false)}>Cancel</button></form>}
         {state === "done" && <span className="pill approved">Done for today</span>}
       </Card>
       <Card>
@@ -130,7 +138,7 @@ export default function AttendancePage() {
         <h3>Recent days</h3>
         {!rows ? <Skeleton /> : rows.length === 0 ? <Empty icon={<IconClock />} text="No attendance yet" /> : (
           <div className="table-wrap"><table><thead><tr><th>Date</th><th>In</th><th>Out</th><th>Total</th></tr></thead>
-            <tbody>{rows.map((r) => <tr key={r._id}><td>{r.date}</td><td>{tm(r.checkIn)}</td><td>{tm(r.checkOut)}{!r.checkOut && r.date !== todayKey() && <span className="flag" title="No check-out recorded">!</span>}</td><td>{dur(r)}</td></tr>)}</tbody></table></div>
+            <tbody>{rows.map((r) => <tr key={r._id}><td>{r.date}</td><td>{tm(r.checkIn)}</td><td>{tm(r.checkOut)}{!r.checkOut && r.date !== todayKey() && <span className="flag" title="No check-out recorded">!</span>}{r.earlyCheckoutReason && <small className="mute"> · {r.earlyCheckoutReason}</small>}</td><td>{dur(r)}</td></tr>)}</tbody></table></div>
         )}
       </Card>
       {burst && <ActionBurst kind={burst.kind} caption={burst.caption} onDone={() => setBurst(null)} />}

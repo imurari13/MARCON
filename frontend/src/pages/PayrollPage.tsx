@@ -1,19 +1,24 @@
 import { useCallback, useEffect, useState, type FormEvent } from "react";
-import { apiRequest } from "../services/api";
+import { apiRequest, downloadFile } from "../services/api";
 import { Card, Empty, PageHead, Pill, Skeleton } from "../components/ui";
 import { useAuth } from "../context/AuthContext";
 import { useToast } from "../components/Toast";
 
 type Run = { _id: string; month: string; status: "DRAFT" | "FINALIZED"; items: unknown[] };
-type Payslip = { gross: number; deductions: number; net: number };
+type Payslip = { month: string; status: "FINALIZED"; gross: number; deductions: number; net: number; absentDays: number; lateMarks: number };
+const currentMonth = () => {
+  const now = new Date();
+  return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
+};
 
 export default function PayrollPage() {
   const { user } = useAuth();
   const toast = useToast();
   const admin = user?.role === "CEO" || user?.role === "HR";
   const [runs, setRuns] = useState<Run[] | null>(null);
-  const [month, setMonth] = useState(new Date().toISOString().slice(0, 7));
+  const [month, setMonth] = useState(currentMonth);
   const [payslip, setPayslip] = useState<Payslip | null>(null);
+  const [downloading, setDownloading] = useState(false);
 
   const load = useCallback(async () => {
     if (admin) setRuns((await apiRequest<{ runs: Run[] }>("/payroll/runs")).runs);
@@ -35,6 +40,15 @@ export default function PayrollPage() {
     catch (error) { toast((error as Error).message, "bad"); }
   }
 
+  async function downloadPayslip() {
+    setDownloading(true);
+    try {
+      await downloadFile(`/payroll/payslip/${month}/pdf`, `payslip-${month}.pdf`);
+      toast("Payslip PDF downloaded");
+    } catch (error) { toast((error as Error).message, "bad"); }
+    finally { setDownloading(false); }
+  }
+
   return <>
     <PageHead title="Payroll" sub="Monthly payroll runs and payslips" />
     <Card><h3>My payslip</h3><label>Month<input type="month" value={month} onChange={event => setMonth(event.target.value)} /></label>
@@ -44,8 +58,9 @@ export default function PayrollPage() {
           <div className="stat"><small>Deductions</small><b className="num">{payslip.deductions.toFixed(2)}</b></div>
           <div className="stat"><small>Net pay</small><b className="num">{payslip.net.toFixed(2)}</b></div>
         </div>
-        <a className="btn" href={`/api/payroll/payslip/${month}/pdf`}>Download PDF payslip</a>
-      </> : <p className="mute">No payslip available for this month.</p>}
+        <div className="payroll-note"><span>Attendance adjustments</span><b>{payslip.absentDays} absent day{payslip.absentDays === 1 ? "" : "s"} · {payslip.lateMarks} late mark{payslip.lateMarks === 1 ? "" : "s"}</b></div>
+        <button className="btn primary" onClick={() => void downloadPayslip()} disabled={downloading}>{downloading ? "Preparing PDF…" : "Download PDF payslip"}</button>
+      </> : <p className="mute">No finalized payslip is available for this month yet.</p>}
     </Card>
     {admin && <>
       <Card><h3>New payroll run</h3><form className="grid-form" onSubmit={create}>

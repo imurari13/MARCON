@@ -22,6 +22,8 @@ const AdminPage = lazy(() => import("./pages/AdminPage"));
 const CorrectionsPage = lazy(() => import("./pages/CorrectionsPage"));
 const PerformancePage = lazy(() => import("./pages/PerformancePage"));
 const ReportsPage = lazy(() => import("./pages/ReportsPage"));
+const WorkFromHomePage = lazy(() => import("./pages/WorkFromHomePage"));
+const ProfilePage = lazy(() => import("./pages/ProfilePage"));
 
 function Gate({ children, guest = false }: { children: ReactElement; guest?: boolean }) {
   const { user, loading } = useAuth();
@@ -43,6 +45,7 @@ export default function App() {
           <Route path="/dashboard" element={<DashboardPage />} />
           <Route path="/attendance" element={<AttendancePage />} />
           <Route path="/leave" element={<LeavePage />} />
+          <Route path="/work-from-home" element={<WorkFromHomePage />} />
           <Route path="/employees" element={<EmployeesPage />} />
           <Route path="/holidays" element={<HolidaysPage />} />
           <Route path="/calendar" element={<CalendarPage />} />
@@ -56,6 +59,7 @@ export default function App() {
           <Route path="/corrections" element={<CorrectionsPage />} />
           <Route path="/performance" element={<PerformancePage />} />
           <Route path="/reports" element={<ReportsPage />} />
+          <Route path="/profile" element={<ProfilePage />} />
         </Route>
         <Route path="*" element={<Navigate to="/dashboard" replace />} />
       </Routes>

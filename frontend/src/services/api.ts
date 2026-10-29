@@ -30,10 +30,13 @@ export function clearApiCache() {
   inflight.clear();
 }
 
-const copy = <V,>(v: V): V =>
-  typeof structuredClone === "function"
-    ? structuredClone(v)
-    : v;
+// Safari did not implement structuredClone until iOS 15.4. API responses are
+// JSON data, so a JSON copy is a safe compatibility fallback for older iOS.
+const copy = <V,>(v: V): V => {
+  if (typeof structuredClone === "function") return structuredClone(v);
+  if (v === undefined) return v;
+  return JSON.parse(JSON.stringify(v)) as V;
+};
 
 export async function apiRequest<T>(
   path: string,

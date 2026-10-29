@@ -8,7 +8,9 @@ export default defineConfig(({ mode }) => {
   return {
     plugins: [react()],
     build: {
-      target: "es2020",
+      // ES2017 keeps the production bundle usable on older iPhones/iPads
+      // (including devices that cannot run the current Safari release).
+      target: "es2017",
       cssCodeSplit: true,
       chunkSizeWarningLimit: 700,
       rollupOptions: {

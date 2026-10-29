@@ -4,6 +4,7 @@ import { useAuth } from "../context/AuthContext";
 import { reduced, whenReady } from "../lib/gsap";
 import GhostTitle from "../components/GhostTitle";
 import Embers from "../components/Embers";
+import PasswordInput from "../components/PasswordInput";
 
 export default function LoginPage() {
   const { login, verifyMfa } = useAuth();
@@ -97,7 +98,7 @@ export default function LoginPage() {
             <p className="sub" data-f>{mfa ? "Enter your six-digit authenticator code." : "Sign in with the account your admin gave you."}</p>
             <label data-f>Email<input type="email" autoComplete="username" required value={email} onChange={(e) => setEmail(e.target.value)} placeholder="you@company.com" /></label>
             <label data-f>Organization<input autoComplete="organization" required value={organization} onChange={(e) => setOrganization(e.target.value.replace(/[^a-zA-Z0-9-]/g, "").toLowerCase())} placeholder="default" /></label>
-            <label data-f>Password<input type="password" autoComplete="current-password" required value={password} onChange={(e) => setPassword(e.target.value)} placeholder="••••••••••••" /></label>
+            <label data-f>Password<PasswordInput autoComplete="current-password" required value={password} onChange={(e) => setPassword(e.target.value)} placeholder="••••••••••••" /></label>
             {mfa && <label data-f>Authenticator code<input inputMode="numeric" autoComplete="one-time-code" required pattern="[0-9]{6}" maxLength={6} value={code} onChange={(e) => setCode(e.target.value.replace(/\D/g, ""))} placeholder="123456" /></label>}
             {error && <p className="form-error" role="alert">{error}</p>}
             <button className="btn primary wide" data-f disabled={busy}>{busy ? "Signing in…" : "Sign in"}</button>

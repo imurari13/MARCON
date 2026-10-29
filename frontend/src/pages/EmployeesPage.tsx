@@ -5,6 +5,7 @@ import { useAuth } from "../context/AuthContext";
 import { Avatar, Card, PageHead, Skeleton } from "../components/ui";
 import { useToast } from "../components/Toast";
 import { IconPlus } from "../components/Icons";
+import PasswordInput from "../components/PasswordInput";
 
 interface Emp { _id: string; employeeId: string; name: string; email: string; role: string; department?: string | null; managerId?: string | null; workStartTime: string; workEndTime: string; dateOfBirth?: string | null; isActive: boolean }
 const blank = { employeeId: "", name: "", email: "", password: "", role: "EMPLOYEE", department: "", managerId: "", workStartTime: "09:30", workEndTime: "18:30", dateOfBirth: "" };
@@ -56,7 +57,7 @@ export default function EmployeesPage() {
             <label>Employee ID<input required value={f.employeeId} onChange={(e) => setF({ ...f, employeeId: e.target.value })} /></label>
             <label>Full name<input required value={f.name} onChange={(e) => setF({ ...f, name: e.target.value })} /></label>
             <label>Email<input type="email" required value={f.email} onChange={(e) => setF({ ...f, email: e.target.value })} /></label>
-            <label>Temporary password<input type="password" required minLength={12} value={f.password} onChange={(e) => setF({ ...f, password: e.target.value })} placeholder="12+ characters" /></label>
+            <label>Temporary password<PasswordInput required minLength={12} value={f.password} onChange={(e) => setF({ ...f, password: e.target.value })} placeholder="12+ characters" /></label>
             <label>Shift starts<input type="time" required value={f.workStartTime} onChange={(e) => setF({ ...f, workStartTime: e.target.value })} /></label>
             <label>Shift ends<input type="time" required value={f.workEndTime} onChange={(e) => setF({ ...f, workEndTime: e.target.value })} /></label>
             <label>Date of birth<input type="date" max={new Date().toLocaleDateString("en-CA")} value={f.dateOfBirth} onChange={(e) => setF({ ...f, dateOfBirth: e.target.value })} /></label>

@@ -10,7 +10,7 @@ import { requireAuth } from "../../middleware/require-auth.js";
 import { requireRole } from "../../middleware/require-role.js";
 import { audit } from "../../utils/audit.js";
 import { buildMonth, firstOpenPunch, type AttRec, type LeaveSpan } from "../../utils/attendance-calc.js";
-import { dateISOOf, hasSaturdayCheckoutDeadlinePassed, isMonthKey, isObjectId, isRealDate, isSaturday, isSunday, monthBounds, timeOf, todayISO } from "../../utils/date.js";
+import { dateISOOf, isMonthKey, isObjectId, isRealDate, isSaturday, isSaturdayCheckInTime, isSaturdayCheckOutTime, isSunday, monthBounds, timeOf, todayISO } from "../../utils/date.js";
 
 export const attendanceRouter = Router();
 attendanceRouter.use(requireAuth);
@@ -39,16 +39,19 @@ async function unresolvedPunch(userId: string): Promise<string | null> {
 attendanceRouter.get("/today", async (_req, res, next) => {
   try {
     const userId = res.locals.user.id as string;
+    const today = todayISO();
     const now = new Date();
-    const today = dateISOOf(now);
+    const saturday = isSaturday(today);
+    const sunday = isSunday(today);
     const [record, blockedBy] = await Promise.all([Attendance.findOne({ userId, date: today }).lean(), unresolvedPunch(userId)]);
     res.json({
       record,
       blockedBy,
       dayPolicy: {
-        isSunday: isSunday(today),
-        isSaturday: isSaturday(today),
-        saturdayCheckoutDeadlinePassed: hasSaturdayCheckoutDeadlinePassed(now),
+        isSunday: sunday,
+        isSaturday: saturday,
+        canCheckIn: !sunday && (!saturday || isSaturdayCheckInTime(now)),
+        canCheckOut: !sunday && (!saturday || isSaturdayCheckOutTime(now)),
       },
     });
   } catch (e) { next(e); }
@@ -59,6 +62,10 @@ attendanceRouter.post("/check-in", async (_req, res, next) => {
     const userId = res.locals.user.id as string;
     const today = todayISO();
     if (isSunday(today)) { res.status(409).json({ error: "Attendance check-in is unavailable on Sundays" }); return; }
+    if (isSaturday(today) && !isSaturdayCheckInTime(new Date())) {
+      res.status(409).json({ error: "Saturday check-in is available from 10:00 AM to 5:00 PM" });
+      return;
+    }
     const [holiday, blockedBy, user] = await Promise.all([Holiday.findOne({ date: today }).select("name").lean(), unresolvedPunch(userId), User.findById(userId).select("workStartTime").lean()]);
     if (holiday) { res.status(409).json({ error: `Today is a holiday: ${holiday.name}` }); return; }
     if (blockedBy) { res.status(409).json({ error: `You didn't check out on ${blockedBy}. Request a correction for that day first, then you can check in.`, blockedBy }); return; }
@@ -82,8 +89,8 @@ attendanceRouter.post("/check-out", async (req, res, next) => {
     const today = dateISOOf(checkedOutAt);
     if (isSunday(today)) { res.status(409).json({ error: "Attendance check-out is unavailable on Sundays" }); return; }
     const saturday = isSaturday(today);
-    if (saturday && hasSaturdayCheckoutDeadlinePassed(checkedOutAt)) {
-      res.status(409).json({ error: "Saturday check-out must be completed by 5:00 PM" });
+    if (saturday && !isSaturdayCheckOutTime(checkedOutAt)) {
+      res.status(409).json({ error: "Saturday check-out is available from 5:00 PM onward" });
       return;
     }
     const [user, openRecord] = await Promise.all([
@@ -92,9 +99,7 @@ attendanceRouter.post("/check-out", async (req, res, next) => {
     ]);
     if (!openRecord) { res.status(409).json({ error: "No open check-in for today" }); return; }
     const shiftMinutes = Math.max(1, minutesOf(user?.workEndTime ?? "18:30") - minutesOf(user?.workStartTime ?? "09:30"));
-    const early = saturday
-      ? timeOf(checkedOutAt) < "17:00"
-      : checkedOutAt.getTime() - openRecord.checkIn.getTime() < shiftMinutes * 60_000;
+    const early = !saturday && checkedOutAt.getTime() - openRecord.checkIn.getTime() < shiftMinutes * 60_000;
     if (early && !parsed.data.reason) { res.status(400).json({ error: "A clarification is required until you complete your assigned shift hours" }); return; }
     const rec = await Attendance.findOneAndUpdate(
       { _id: openRecord._id, checkOut: null },

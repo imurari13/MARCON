@@ -19,7 +19,6 @@ export function isRealDate(value: string): boolean {
 export const isObjectId = (value: string): boolean => /^[a-f\d]{24}$/i.test(value);
 
 const timeFormatter = new Intl.DateTimeFormat("en-GB", { timeZone: env.APP_TIMEZONE, hour: "2-digit", minute: "2-digit", hour12: false });
-const timeWithSecondsFormatter = new Intl.DateTimeFormat("en-GB", { timeZone: env.APP_TIMEZONE, hour: "2-digit", minute: "2-digit", second: "2-digit", hour12: false });
 
 /** The company-time-zone calendar date (YYYY-MM-DD) an instant falls on. */
 export const dateISOOf = (d: Date): string => formatter.format(d);
@@ -38,9 +37,17 @@ const weekdayOf = (iso: string): number => new Date(`${iso}T00:00:00Z`).getUTCDa
 export const isSunday = (iso: string): boolean => weekdayOf(iso) === 0;
 export const isSaturday = (iso: string): boolean => weekdayOf(iso) === 6;
 
-/** Whether the Saturday check-out deadline has passed in the company time zone. */
-export const hasSaturdayCheckoutDeadlinePassed = (instant: Date): boolean =>
-  isSaturday(dateISOOf(instant)) && timeWithSecondsFormatter.format(instant) >= "17:00:00";
+const minutesOf = (time: string): number => {
+  const [hours, minutes] = time.split(":").map(Number);
+  return (hours ?? 0) * 60 + (minutes ?? 0);
+};
+
+export const isSaturdayCheckInTime = (instant: Date): boolean => {
+  const minutes = minutesOf(timeOf(instant));
+  return minutes >= 10 * 60 && minutes <= 17 * 60;
+};
+
+export const isSaturdayCheckOutTime = (instant: Date): boolean => minutesOf(timeOf(instant)) >= 17 * 60;
 
 export const isWeekend = (iso: string): boolean => {
   const w = weekdayOf(iso);

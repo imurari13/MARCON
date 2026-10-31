@@ -5,17 +5,38 @@ process.env.MONGODB_URI ??= "mongodb://127.0.0.1:27017";
 process.env.SESSION_SECRET ??= "test-secret-test-secret-test-secret-1234";
 process.env.APP_TIMEZONE = "UTC";
 const { buildMonth, firstOpenPunch } = await import("./attendance-calc.js");
-const { hasSaturdayCheckoutDeadlinePassed, isSaturday, isSunday } = await import("./date.js");
+const { isSaturday, isSaturdayCheckInTime, isSaturdayCheckOutTime, isSunday } = await import("./date.js");
 
 const at = (date: string, hhmm: string) => new Date(`${date}T${hhmm}:00Z`);
 const base = { month: "2026-10", today: "2026-10-15", now: at("2026-10-15", "12:00"), holidays: new Set(["2026-10-02"]) };
 
-test("Sunday is a no-attendance day and Saturday check-out closes at 5 PM", () => {
+test("Sunday is a no-attendance day and Saturday is a working day", () => {
   assert.equal(isSunday("2026-10-04"), true);
   assert.equal(isSaturday("2026-10-03"), true);
-  assert.equal(hasSaturdayCheckoutDeadlinePassed(at("2026-10-03", "16:59")), false);
-  assert.equal(hasSaturdayCheckoutDeadlinePassed(at("2026-10-03", "17:00")), true);
-  assert.equal(hasSaturdayCheckoutDeadlinePassed(at("2026-10-04", "17:00")), false);
+});
+
+test("Saturday check-in is limited to 10 AM through 5 PM", () => {
+  assert.equal(isSaturdayCheckInTime(at("2026-10-03", "09:59")), false);
+  assert.equal(isSaturdayCheckInTime(at("2026-10-03", "10:00")), true);
+  assert.equal(isSaturdayCheckInTime(at("2026-10-03", "17:00")), true);
+  assert.equal(isSaturdayCheckInTime(at("2026-10-03", "17:01")), false);
+});
+
+test("Saturday check-out is allowed from 5 PM onward", () => {
+  assert.equal(isSaturdayCheckOutTime(at("2026-10-03", "16:59")), false);
+  assert.equal(isSaturdayCheckOutTime(at("2026-10-03", "17:00")), true);
+  assert.equal(isSaturdayCheckOutTime(at("2026-10-03", "20:00")), true);
+});
+
+test("a Saturday check-out after 5 PM counts as a full attendance day", () => {
+  const { days, summary } = buildMonth({
+    ...base,
+    today: "2026-10-04",
+    records: [{ date: "2026-10-03", checkIn: at("2026-10-03", "10:00"), checkOut: at("2026-10-03", "18:30") }],
+    leaves: [],
+  });
+  assert.equal(days.find((day) => day.date === "2026-10-03")?.status, "present");
+  assert.equal(summary.present, 1);
 });
 
 test("counts present days, hours, leave and absences for a month so far", () => {

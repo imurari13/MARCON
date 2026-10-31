@@ -19,6 +19,7 @@ export function isRealDate(value: string): boolean {
 export const isObjectId = (value: string): boolean => /^[a-f\d]{24}$/i.test(value);
 
 const timeFormatter = new Intl.DateTimeFormat("en-GB", { timeZone: env.APP_TIMEZONE, hour: "2-digit", minute: "2-digit", hour12: false });
+const timeWithSecondsFormatter = new Intl.DateTimeFormat("en-GB", { timeZone: env.APP_TIMEZONE, hour: "2-digit", minute: "2-digit", second: "2-digit", hour12: false });
 
 /** The company-time-zone calendar date (YYYY-MM-DD) an instant falls on. */
 export const dateISOOf = (d: Date): string => formatter.format(d);
@@ -32,15 +33,24 @@ export const addDays = (iso: string, n: number): string => {
   return d.toISOString().slice(0, 10);
 };
 
+const weekdayOf = (iso: string): number => new Date(`${iso}T00:00:00Z`).getUTCDay();
+
+export const isSunday = (iso: string): boolean => weekdayOf(iso) === 0;
+export const isSaturday = (iso: string): boolean => weekdayOf(iso) === 6;
+
+/** Whether the Saturday check-out deadline has passed in the company time zone. */
+export const hasSaturdayCheckoutDeadlinePassed = (instant: Date): boolean =>
+  isSaturday(dateISOOf(instant)) && timeWithSecondsFormatter.format(instant) >= "17:00:00";
+
 export const isWeekend = (iso: string): boolean => {
-  const w = new Date(`${iso}T00:00:00Z`).getUTCDay();
+  const w = weekdayOf(iso);
   return w === 0 || w === 6;
 };
 
 /** Company weekly holidays: every Sunday and the second Saturday of each month. */
 export const isCompanyWeeklyHoliday = (iso: string): boolean => {
   const date = new Date(`${iso}T00:00:00Z`);
-  const weekday = date.getUTCDay();
+  const weekday = weekdayOf(iso);
   return weekday === 0 || (weekday === 6 && date.getUTCDate() >= 8 && date.getUTCDate() <= 14);
 };
 

@@ -5,9 +5,18 @@ process.env.MONGODB_URI ??= "mongodb://127.0.0.1:27017";
 process.env.SESSION_SECRET ??= "test-secret-test-secret-test-secret-1234";
 process.env.APP_TIMEZONE = "UTC";
 const { buildMonth, firstOpenPunch } = await import("./attendance-calc.js");
+const { hasSaturdayCheckoutDeadlinePassed, isSaturday, isSunday } = await import("./date.js");
 
 const at = (date: string, hhmm: string) => new Date(`${date}T${hhmm}:00Z`);
 const base = { month: "2026-10", today: "2026-10-15", now: at("2026-10-15", "12:00"), holidays: new Set(["2026-10-02"]) };
+
+test("Sunday is a no-attendance day and Saturday check-out closes at 5 PM", () => {
+  assert.equal(isSunday("2026-10-04"), true);
+  assert.equal(isSaturday("2026-10-03"), true);
+  assert.equal(hasSaturdayCheckoutDeadlinePassed(at("2026-10-03", "16:59")), false);
+  assert.equal(hasSaturdayCheckoutDeadlinePassed(at("2026-10-03", "17:00")), true);
+  assert.equal(hasSaturdayCheckoutDeadlinePassed(at("2026-10-04", "17:00")), false);
+});
 
 test("counts present days, hours, leave and absences for a month so far", () => {
   const { days, summary } = buildMonth({

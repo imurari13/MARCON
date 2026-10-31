@@ -16,6 +16,7 @@ interface Fix { _id: string; date: string; reason: string; status: string; reque
 interface MonthDay { date: string; status: "present" | "incomplete" | "leave" | "holiday" | "weekend" | "absent" | "upcoming" | "na"; minutes: number; missedPunchOut: boolean }
 interface MonthSummary { workingDays: number; present: number; incomplete: number; minutes: number; rate: number }
 interface PersonalMonth { summary: MonthSummary; days: MonthDay[] }
+interface DayPolicy { isSunday: boolean; isSaturday: boolean; saturdayCheckoutDeadlinePassed: boolean }
 const blankFix = { date: "", requestedCheckIn: "", requestedCheckOut: "", reason: "" };
 /** "YYYY-MM-DDTHH:mm" for a datetime-local input. */
 const localInput = (date: string, hhmm: string) => `${date}T${hhmm}`;
@@ -66,13 +67,14 @@ export default function AttendancePage() {
   const [burst, setBurst] = useState<{ kind: BurstKind; caption: string } | null>(null);
   const [correction, setCorrection] = useState(blankFix);
   const [blockedBy, setBlockedBy] = useState<string | null>(null);
+  const [dayPolicy, setDayPolicy] = useState<DayPolicy>({ isSunday: false, isSaturday: false, saturdayCheckoutDeadlinePassed: false });
   const [fixes, setFixes] = useState<Fix[] | null>(null);
   const [checkoutReason, setCheckoutReason] = useState("");
   const [showCheckout, setShowCheckout] = useState(false);
   const form = useRef<HTMLFormElement>(null);
   const load = useCallback(async () => {
-    const [a, b, c, d] = await Promise.all([apiRequest<{ record: Rec | null; blockedBy: string | null }>("/attendance/today"), apiRequest<{ records: Rec[] }>("/attendance"), apiRequest<{ requests: Fix[] }>("/attendance/regularizations/mine"), apiRequest<PersonalMonth>("/attendance/summary")]);
-    setToday(a.record); setBlockedBy(a.blockedBy); setRows(b.records); setFixes(c.requests); setMonth(d);
+    const [a, b, c, d] = await Promise.all([apiRequest<{ record: Rec | null; blockedBy: string | null; dayPolicy: DayPolicy }>("/attendance/today"), apiRequest<{ records: Rec[] }>("/attendance"), apiRequest<{ requests: Fix[] }>("/attendance/regularizations/mine"), apiRequest<PersonalMonth>("/attendance/summary")]);
+    setToday(a.record); setBlockedBy(a.blockedBy); setDayPolicy(a.dayPolicy); setRows(b.records); setFixes(c.requests); setMonth(d);
   }, []);
   useEffect(() => { load().catch((e: Error) => toast(e.message, "bad")); }, [load, toast]);
   useEffect(() => {
@@ -137,10 +139,13 @@ export default function AttendancePage() {
           <small>{state === "out" ? "You haven't checked in yet" : state === "in" ? `In since ${tm(today!.checkIn)} · ${dur(today!)}` : `Worked ${dur(today!)} today`}</small>
         </div>
         <ShiftRing start={user?.workStartTime ?? "09:30"} end={user?.workEndTime ?? "18:30"} checkIn={today?.checkIn ?? null} now={now} />
+        {dayPolicy.isSunday && <p className="mute">Attendance check-in and check-out are unavailable on Sundays.</p>}
+        {dayPolicy.isSaturday && !dayPolicy.saturdayCheckoutDeadlinePassed && <p className="mute">Saturday check-out must be completed by 5:00 PM.</p>}
+        {dayPolicy.saturdayCheckoutDeadlinePassed && <p className="mute">The Saturday check-out deadline (5:00 PM) has passed.</p>}
         {state !== "out" && (today?.lateMinutes ?? 0) > 0 && <span className="pill pending">Late by {today!.lateMinutes} min</span>}
-        {state === "out" && <button className="btn primary" disabled={busy || !!blockedBy} title={blockedBy ? "Request a correction for your missed check-out first" : undefined} onClick={() => void act("/attendance/check-in", "in")}>Check in</button>}
-        {state === "in" && !showCheckout && <button className="btn" disabled={busy} onClick={() => setShowCheckout(true)}>Check out</button>}
-        {state === "in" && showCheckout && <form className="grid-form" onSubmit={checkOut}><label className="span">{needsCheckoutReason ? "Early check-out clarification" : "Check-out note (optional)"}<small>{needsCheckoutReason ? `You need to complete your assigned hours by ${completedAtLabel}, or provide a clarification.` : "Your assigned shift hours are complete."}</small><input autoFocus required={needsCheckoutReason} value={checkoutReason} onChange={(e) => setCheckoutReason(e.target.value)} minLength={checkoutReason ? 3 : undefined} maxLength={500} placeholder={needsCheckoutReason ? "Explain why you need to leave before completing your shift" : "Add an optional note"} /></label><button className="btn primary" disabled={busy}>Confirm check out</button><button type="button" className="btn ghost" disabled={busy} onClick={() => setShowCheckout(false)}>Cancel</button></form>}
+        {state === "out" && <button className="btn primary" disabled={busy || !!blockedBy || dayPolicy.isSunday} title={blockedBy ? "Request a correction for your missed check-out first" : undefined} onClick={() => void act("/attendance/check-in", "in")}>Check in</button>}
+        {state === "in" && !showCheckout && <button className="btn" disabled={busy || dayPolicy.isSunday || dayPolicy.saturdayCheckoutDeadlinePassed} onClick={() => setShowCheckout(true)}>Check out</button>}
+        {state === "in" && showCheckout && <form className="grid-form" onSubmit={checkOut}><label className="span">{needsCheckoutReason ? "Early check-out clarification" : "Check-out note (optional)"}<small>{dayPolicy.isSaturday ? "Complete Saturday check-out by 5:00 PM." : needsCheckoutReason ? `You need to complete your assigned hours by ${completedAtLabel}, or provide a clarification.` : "Your assigned shift hours are complete."}</small><input autoFocus required={needsCheckoutReason && !dayPolicy.isSaturday} value={checkoutReason} onChange={(e) => setCheckoutReason(e.target.value)} minLength={checkoutReason ? 3 : undefined} maxLength={500} placeholder={needsCheckoutReason && !dayPolicy.isSaturday ? "Explain why you need to leave before completing your shift" : "Add an optional note"} /></label><button className="btn primary" disabled={busy || dayPolicy.isSunday || dayPolicy.saturdayCheckoutDeadlinePassed}>Confirm check out</button><button type="button" className="btn ghost" disabled={busy} onClick={() => setShowCheckout(false)}>Cancel</button></form>}
         {state === "done" && <span className="pill approved">Done for today</span>}
       </Card>
       <Card>

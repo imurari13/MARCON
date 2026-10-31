@@ -10,7 +10,7 @@ import { requireAuth } from "../../middleware/require-auth.js";
 import { requireRole } from "../../middleware/require-role.js";
 import { audit } from "../../utils/audit.js";
 import { buildMonth, firstOpenPunch, type AttRec, type LeaveSpan } from "../../utils/attendance-calc.js";
-import { dateISOOf, isMonthKey, isObjectId, isRealDate, monthBounds, timeOf, todayISO } from "../../utils/date.js";
+import { dateISOOf, hasSaturdayCheckoutDeadlinePassed, isMonthKey, isObjectId, isRealDate, isSaturday, isSunday, monthBounds, timeOf, todayISO } from "../../utils/date.js";
 
 export const attendanceRouter = Router();
 attendanceRouter.use(requireAuth);
@@ -39,20 +39,32 @@ async function unresolvedPunch(userId: string): Promise<string | null> {
 attendanceRouter.get("/today", async (_req, res, next) => {
   try {
     const userId = res.locals.user.id as string;
-    const [record, blockedBy] = await Promise.all([Attendance.findOne({ userId, date: todayISO() }).lean(), unresolvedPunch(userId)]);
-    res.json({ record, blockedBy });
+    const now = new Date();
+    const today = dateISOOf(now);
+    const [record, blockedBy] = await Promise.all([Attendance.findOne({ userId, date: today }).lean(), unresolvedPunch(userId)]);
+    res.json({
+      record,
+      blockedBy,
+      dayPolicy: {
+        isSunday: isSunday(today),
+        isSaturday: isSaturday(today),
+        saturdayCheckoutDeadlinePassed: hasSaturdayCheckoutDeadlinePassed(now),
+      },
+    });
   } catch (e) { next(e); }
 });
 
 attendanceRouter.post("/check-in", async (_req, res, next) => {
   try {
     const userId = res.locals.user.id as string;
-    const [holiday, blockedBy, user] = await Promise.all([Holiday.findOne({ date: todayISO() }).select("name").lean(), unresolvedPunch(userId), User.findById(userId).select("workStartTime").lean()]);
+    const today = todayISO();
+    if (isSunday(today)) { res.status(409).json({ error: "Attendance check-in is unavailable on Sundays" }); return; }
+    const [holiday, blockedBy, user] = await Promise.all([Holiday.findOne({ date: today }).select("name").lean(), unresolvedPunch(userId), User.findById(userId).select("workStartTime").lean()]);
     if (holiday) { res.status(409).json({ error: `Today is a holiday: ${holiday.name}` }); return; }
     if (blockedBy) { res.status(409).json({ error: `You didn't check out on ${blockedBy}. Request a correction for that day first, then you can check in.`, blockedBy }); return; }
     const checkedInAt = new Date();
     const rec = await Attendance.findOneAndUpdate(
-      { userId, date: todayISO() },
+      { userId, date: today },
       { $setOnInsert: { checkIn: checkedInAt, lateMinutes: lateMinutesFor(checkedInAt, user?.workStartTime ?? "09:30") } },
       { upsert: true, returnDocument: "after" },
     );
@@ -67,13 +79,22 @@ attendanceRouter.post("/check-out", async (req, res, next) => {
     const parsed = checkOutSchema.safeParse(req.body);
     if (!parsed.success) { res.status(400).json({ error: "Enter an early check-out reason of at least 3 characters" }); return; }
     const checkedOutAt = new Date();
+    const today = dateISOOf(checkedOutAt);
+    if (isSunday(today)) { res.status(409).json({ error: "Attendance check-out is unavailable on Sundays" }); return; }
+    const saturday = isSaturday(today);
+    if (saturday && hasSaturdayCheckoutDeadlinePassed(checkedOutAt)) {
+      res.status(409).json({ error: "Saturday check-out must be completed by 5:00 PM" });
+      return;
+    }
     const [user, openRecord] = await Promise.all([
       User.findById(res.locals.user.id).select("workStartTime workEndTime").lean(),
-      Attendance.findOne({ userId: res.locals.user.id, date: todayISO(), checkOut: null }).select("_id checkIn").lean(),
+      Attendance.findOne({ userId: res.locals.user.id, date: today, checkOut: null }).select("_id checkIn").lean(),
     ]);
     if (!openRecord) { res.status(409).json({ error: "No open check-in for today" }); return; }
     const shiftMinutes = Math.max(1, minutesOf(user?.workEndTime ?? "18:30") - minutesOf(user?.workStartTime ?? "09:30"));
-    const early = checkedOutAt.getTime() - openRecord.checkIn.getTime() < shiftMinutes * 60_000;
+    const early = saturday
+      ? timeOf(checkedOutAt) < "17:00"
+      : checkedOutAt.getTime() - openRecord.checkIn.getTime() < shiftMinutes * 60_000;
     if (early && !parsed.data.reason) { res.status(400).json({ error: "A clarification is required until you complete your assigned shift hours" }); return; }
     const rec = await Attendance.findOneAndUpdate(
       { _id: openRecord._id, checkOut: null },

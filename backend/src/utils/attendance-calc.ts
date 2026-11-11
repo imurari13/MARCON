@@ -55,7 +55,7 @@ export function buildMonth(input: MonthInput): { days: DayRow[]; summary: MonthS
     const row: DayRow = { date: d, status: "upcoming", checkIn: null, checkOut: null, minutes: 0, missedPunchOut: false, leaveType: span?.leaveType ?? null };
     const rec = byDate.get(d);
 
-    if (input.joined && d < input.joined && !rec) { row.status = "na"; days.push(row); continue; }
+    if (input.joined && d < input.joined) { row.status = "na"; days.push(row); continue; }
     const counted = d <= input.today;
     const weeklyHoliday = isCompanyWeeklyHoliday(d);
     const working = !weeklyHoliday && !input.holidays.has(d);

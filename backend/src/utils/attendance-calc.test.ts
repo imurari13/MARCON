@@ -100,6 +100,22 @@ test("days before a person joined are not counted against them", () => {
   assert.equal(summary.workingDays, 4); // 12, 13, 14, 15
 });
 
+test("attendance records before a person joined do not inflate their attendance rate", () => {
+  const { days, summary } = buildMonth({
+    ...base,
+    joined: "2026-10-12",
+    records: [
+      { date: "2026-10-05", checkIn: at("2026-10-05", "09:30"), checkOut: at("2026-10-05", "18:30") },
+      { date: "2026-10-12", checkIn: at("2026-10-12", "09:30"), checkOut: at("2026-10-12", "18:30") },
+    ],
+    leaves: [],
+  });
+  assert.equal(days.find((d) => d.date === "2026-10-05")?.status, "na");
+  assert.equal(summary.workingDays, 4);
+  assert.equal(summary.present, 1);
+  assert.equal(summary.rate, 25);
+});
+
 test("firstOpenPunch returns the oldest earlier day with no check-out", () => {
   const recs = [{ date: "2026-10-09", checkOut: null }, { date: "2026-10-06", checkOut: null }, { date: "2026-10-07", checkOut: new Date() }, { date: "2026-10-15", checkOut: null }];
   assert.equal(firstOpenPunch(recs, "2026-10-15"), "2026-10-06");

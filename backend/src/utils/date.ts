@@ -42,6 +42,15 @@ const minutesOf = (time: string): number => {
   return (hours ?? 0) * 60 + (minutes ?? 0);
 };
 
+/**
+ * Duration of a scheduled shift.  An end time at or before the start time is
+ * on the following day (for example, 22:00–07:00).
+ */
+export const shiftDurationMinutes = (start: string, end: string): number => {
+  const duration = minutesOf(end) - minutesOf(start);
+  return duration > 0 ? duration : duration + 24 * 60;
+};
+
 export const isSaturdayCheckInTime = (instant: Date): boolean => {
   const minutes = minutesOf(timeOf(instant));
   return minutes >= 10 * 60 && minutes <= 17 * 60;

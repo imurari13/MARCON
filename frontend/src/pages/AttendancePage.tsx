@@ -29,14 +29,19 @@ const dur = (r: Rec) => {
 };
 
 const mins = (t: string) => { const [h, m] = t.split(":").map(Number); return h * 60 + (m || 0); };
+/** Shifts ending at or before their start continue into the following day. */
+const shiftDurationMinutes = (start: string, end: string) => {
+  const duration = mins(end) - mins(start);
+  return duration > 0 ? duration : duration + 24 * 60;
+};
 
 /** Circular shift-progress gauge, drawn with DrawSVG. */
 function ShiftRing({ start, end, checkIn, now }: { start: string; end: string; checkIn: string | null; now: Date }) {
   const arc = useRef<SVGCircleElement>(null);
-  const cur = now.getHours() * 60 + now.getMinutes();
   const checkedInAt = checkIn ? new Date(checkIn) : null;
-  const actualStart = checkedInAt ? checkedInAt.getHours() * 60 + checkedInAt.getMinutes() : mins(start);
-  const p = checkedInAt ? Math.max(0, Math.min(1, (cur - actualStart) / Math.max(1, mins(end) - mins(start)))) : 0;
+  const scheduledMinutes = shiftDurationMinutes(start, end);
+  const elapsedMinutes = checkedInAt ? Math.max(0, (now.getTime() - checkedInAt.getTime()) / 60_000) : 0;
+  const p = checkedInAt ? Math.max(0, Math.min(1, elapsedMinutes / scheduledMinutes)) : 0;
   const tick = Math.round(p * 200);
   useLayoutEffect(() => { if (arc.current) gsap.set(arc.current, { drawSVG: "0% 0%" }); }, []);
   useEffect(() => {
@@ -45,7 +50,7 @@ function ShiftRing({ start, end, checkIn, now }: { start: string; end: string; c
     if (reduced()) gsap.set(arc.current, to); else gsap.to(arc.current, { ...to, duration: 1.8, ease: "expo.out" });
   }, [tick]);
   return (
-    <div className="shift-ring" aria-label={checkedInAt ? `${Math.round(p * 100)}% of work time elapsed since check-in` : "Work progress starts when you check in"}>
+    <div className="shift-ring" aria-label={checkedInAt ? `${Math.round(p * 100)}% of assigned shift elapsed since check-in` : "Work progress starts when you check in"}>
       <svg viewBox="0 0 200 200">
         <defs><linearGradient id="rg" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stopColor="#e8392b" /><stop offset="1" stopColor="#ff9a5c" /></linearGradient></defs>
         <circle cx="100" cy="100" r="86" fill="none" stroke="rgba(255,255,255,.07)" strokeWidth="8" />
@@ -99,7 +104,7 @@ export default function AttendancePage() {
     await act("/attendance/check-out", "out", { reason: checkoutReason || undefined });
   }
   const state = !today ? "out" : today.checkOut ? "done" : "in";
-  const assignedMinutes = Math.max(1, mins(user?.workEndTime ?? "18:30") - mins(user?.workStartTime ?? "09:30"));
+  const assignedMinutes = shiftDurationMinutes(user?.workStartTime ?? "09:30", user?.workEndTime ?? "18:30");
   const completedAt = today ? new Date(new Date(today.checkIn).getTime() + assignedMinutes * 60_000) : null;
   const needsCheckoutReason = !dayPolicy.isSaturday && !!completedAt && now < completedAt;
   const completedAtLabel = completedAt?.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) ?? "the end of your shift";

@@ -10,7 +10,7 @@ import { requireAuth } from "../../middleware/require-auth.js";
 import { requireRole } from "../../middleware/require-role.js";
 import { audit } from "../../utils/audit.js";
 import { buildMonth, firstOpenPunch, type AttRec, type LeaveSpan } from "../../utils/attendance-calc.js";
-import { dateISOOf, isMonthKey, isObjectId, isRealDate, isSaturday, isSaturdayCheckInTime, isSaturdayCheckOutTime, isSunday, monthBounds, timeOf, todayISO } from "../../utils/date.js";
+import { dateISOOf, isMonthKey, isObjectId, isRealDate, isSaturday, isSaturdayCheckInTime, isSaturdayCheckOutTime, isSunday, monthBounds, shiftDurationMinutes, timeOf, todayISO } from "../../utils/date.js";
 
 export const attendanceRouter = Router();
 attendanceRouter.use(requireAuth);
@@ -98,7 +98,7 @@ attendanceRouter.post("/check-out", async (req, res, next) => {
       Attendance.findOne({ userId: res.locals.user.id, date: today, checkOut: null }).select("_id checkIn").lean(),
     ]);
     if (!openRecord) { res.status(409).json({ error: "No open check-in for today" }); return; }
-    const shiftMinutes = Math.max(1, minutesOf(user?.workEndTime ?? "18:30") - minutesOf(user?.workStartTime ?? "09:30"));
+    const shiftMinutes = shiftDurationMinutes(user?.workStartTime ?? "09:30", user?.workEndTime ?? "18:30");
     const early = !saturday && checkedOutAt.getTime() - openRecord.checkIn.getTime() < shiftMinutes * 60_000;
     if (early && !parsed.data.reason) { res.status(400).json({ error: "A clarification is required until you complete your assigned shift hours" }); return; }
     const rec = await Attendance.findOneAndUpdate(

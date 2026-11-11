@@ -5,7 +5,7 @@ process.env.MONGODB_URI ??= "mongodb://127.0.0.1:27017";
 process.env.SESSION_SECRET ??= "test-secret-test-secret-test-secret-1234";
 process.env.APP_TIMEZONE = "UTC";
 const { buildMonth, firstOpenPunch } = await import("./attendance-calc.js");
-const { isSaturday, isSaturdayCheckInTime, isSaturdayCheckOutTime, isSunday } = await import("./date.js");
+const { isSaturday, isSaturdayCheckInTime, isSaturdayCheckOutTime, isSunday, shiftDurationMinutes } = await import("./date.js");
 
 const at = (date: string, hhmm: string) => new Date(`${date}T${hhmm}:00Z`);
 const base = { month: "2026-10", today: "2026-10-15", now: at("2026-10-15", "12:00"), holidays: new Set(["2026-10-02"]) };
@@ -26,6 +26,12 @@ test("Saturday check-out is allowed from 5 PM onward", () => {
   assert.equal(isSaturdayCheckOutTime(at("2026-10-03", "16:59")), false);
   assert.equal(isSaturdayCheckOutTime(at("2026-10-03", "17:00")), true);
   assert.equal(isSaturdayCheckOutTime(at("2026-10-03", "20:00")), true);
+});
+
+test("shift duration supports shifts that finish on the following day", () => {
+  assert.equal(shiftDurationMinutes("09:30", "18:30"), 540);
+  assert.equal(shiftDurationMinutes("22:00", "07:00"), 540);
+  assert.equal(shiftDurationMinutes("10:00", "07:00"), 1260);
 });
 
 test("a Saturday check-out after 5 PM counts as a full attendance day", () => {
